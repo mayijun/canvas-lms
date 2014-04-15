@@ -20,6 +20,7 @@ define [
 
     els:
       '.filterable': '$filter'
+      '.filterable-unassigned-users': '$filterUnassignedUsers'
       '.unassigned-users-heading': '$unassignedUsersHeading'
       '.groups-with-count': '$groupsHeading'
 
@@ -34,9 +35,6 @@ define [
       options.unassignedUsersView ?= @unassignedUsersView(options)
       if progress = @model.get('progress')
         @model.progressModel.set progress
-        @randomlyAssignStudentsInProgress = true
-      else if @model.get('progress_url') or @model.progressStarting
-        @randomlyAssignStudentsInProgress = true
       super
 
     groupsView: (options) ->
@@ -59,29 +57,37 @@ define [
 
     attach: ->
       @model.on 'destroy', @remove, this
+      @model.on 'change', => @groupsView.updateDetails()
 
       @model.on 'change:unassigned_users_count', @setUnassignedHeading, this
       @groups.on 'add remove reset', @setGroupsHeading, this
 
       @model.progressModel.on 'change:url', =>
         @model.progressModel.set({'completion': 0})
-        @randomlyAssignStudentsInProgress = true
       @model.progressModel.on 'change', @render
       @model.on 'progressResolved', =>
-        @model.groups().fetch()
-        @model.unassignedUsers().reset()
-        @randomlyAssignStudentsInProgress = false
-        @render()
+        @model.fetch success: =>
+          @model.groups().fetch()
+          @model.unassignedUsers().fetch()
+          @render()
+
+    cacheEls: ->
+      super
+      # need to be set before their afterRender's run (i.e. before this
+      # view's afterRender)
+      @groupsView.$externalFilter = @$filter
+      @unassignedUsersView.$externalFilter = @$filterUnassignedUsers
 
     afterRender: ->
-      @groupsView.$externalFilter = @$filter
       @setUnassignedHeading()
       @setGroupsHeading()
 
     setUnassignedHeading: ->
       count = @model.unassignedUsersCount() ? 0
       @$unassignedUsersHeading.text(
-        if ENV.group_user_type is 'student'
+        if @model.get('allows_multiple_memberships')
+          I18n.t('everyone', "Everyone (%{count})", {count})
+        else if ENV.group_user_type is 'student'
           I18n.t('unassigned_students', "Unassigned Students (%{count})", {count})
         else
           I18n.t('unassigned_users', "Unassigned Users (%{count})", {count})
@@ -93,6 +99,8 @@ define [
 
     toJSON: ->
       json = @model.present()
-      json.randomlyAssignStudentsInProgress = @randomlyAssignStudentsInProgress
+      json.ENV = ENV
+      json.groupsAreSearchable = ENV.IS_LARGE_ROSTER and
+                                 not json.randomlyAssignStudentsInProgress
       json
 

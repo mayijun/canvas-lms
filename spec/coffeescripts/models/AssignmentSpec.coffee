@@ -1,7 +1,9 @@
 define [
   'compiled/models/Assignment'
+  'compiled/models/Submission'
   'compiled/models/DateGroup'
-], (Assignment, DateGroup) ->
+  'helpers/fakeENV'
+], (Assignment, Submission, DateGroup, fakeENV) ->
 
   module "Assignment"
 
@@ -213,18 +215,22 @@ define [
   module "Assignment#submissionType"
 
   test "returns 'none' if record's submission_types is ['none']", ->
-    assignment = new Assignment name: 'foo'
+    assignment = new Assignment name: 'foo', id: '12'
     assignment.set 'submission_types', [ 'none' ]
     deepEqual assignment.submissionType(), 'none'
 
   test "returns 'on_paper' if record's submission_types includes on_paper", ->
-    assignment = new Assignment name: 'foo'
+    assignment = new Assignment name: 'foo', id: '13'
     assignment.set 'submission_types', [ 'on_paper' ]
     deepEqual assignment.submissionType(), 'on_paper'
 
   test "returns online submission otherwise", ->
-    assignment = new Assignment name: 'foo'
+    assignment = new Assignment name: 'foo', id: '14'
     assignment.set 'submission_types', [ 'online_upload' ]
+    deepEqual assignment.submissionType(), 'online'
+
+  test "returns online for new records", ->
+    assignment = new Assignment name: 'foo'
     deepEqual assignment.submissionType(), 'online'
 
   module "Assignment#expectsSubmission"
@@ -258,35 +264,11 @@ define [
     assignment.set 'submission_types': [ 'external_tool', 'on_paper', 'attendance' ]
     deepEqual assignment.allowedToSubmit(), false
 
-  module "Assignment#isGraded"
-
-  test "returns true if notYetGraded is null", ->
-    assignment = new Assignment name: 'foo'
-    assignment.set 'submission': new Backbone.Model {'notYetGraded': null}
-    deepEqual assignment.isGraded(), true
-
-  test "returns false if notYetGraded is true", ->
-    assignment = new Assignment name: 'foo'
-    assignment.set 'submission': new Backbone.Model {'notYetGraded': true}
-    deepEqual assignment.isGraded(), false
-
-  module "Assignment#hasSubmission"
-
-  test "returns false if submission is null", ->
-    assignment = new Assignment name: 'foo'
-    assignment.set 'submission': null
-    deepEqual assignment.hasSubmission(), false
-
-  test "returns true if submission has a submission type", ->
-    assignment = new Assignment name: 'foo'
-    assignment.set 'submission': new Backbone.Model {'submission_type': 'online'}
-    deepEqual assignment.hasSubmission(), true
-
   module "Assignment#withoutGradedSubmission"
 
   test "returns false if there is a submission", ->
     assignment = new Assignment name: 'foo'
-    assignment.set 'submission': new Backbone.Model {'submission_type': 'online'}
+    assignment.set 'submission': new Submission {'submission_type': 'online'}
     deepEqual assignment.withoutGradedSubmission(), false
 
   test "returns true if there is no submission", ->
@@ -296,12 +278,12 @@ define [
 
   test "returns true if there is a submission, but no grade", ->
     assignment = new Assignment name: 'foo'
-    assignment.set 'submission': new Backbone.Model {'notYetGraded': true}
+    assignment.set 'submission': new Submission
     deepEqual assignment.withoutGradedSubmission(), true
 
   test "returns false if there is a submission and a grade", ->
     assignment = new Assignment name: 'foo'
-    assignment.set 'submission': new Backbone.Model {'grade': 305}
+    assignment.set 'submission': new Submission {'grade': 305}
     deepEqual assignment.withoutGradedSubmission(), false
 
   module "Assignment#acceptsOnlineUpload"
@@ -408,6 +390,32 @@ define [
     assignment = new Assignment
     deepEqual assignment.allDates(), []
 
+  module "Assignment#singleSectionDueDate",
+    setup: -> fakeENV.setup()
+    teardown: -> fakeENV.teardown()
+
+  test "gets the due date for section instead of null", ->
+    dueAt = new Date("2013-11-27T11:01:00Z")
+    assignment = new Assignment all_dates: [
+      {due_at: null, title: "Everyone"},
+      {due_at: dueAt, title: "Summer"}
+    ]
+    false_stub = sinon.stub assignment, "multipleDueDates"
+    false_stub.returns false
+    deepEqual assignment.singleSectionDueDate(), dueAt.toISOString()
+    false_stub.restore()
+
+  test "returns due_at when only one date/section are present", ->
+    date = Date.now()
+    assignment = new Assignment name: 'Taco party!'
+    assignment.set 'due_at', date
+    deepEqual assignment.singleSectionDueDate(), assignment.dueAt()
+
+    # For students
+    ENV.PERMISSIONS = { manage: false }
+    deepEqual assignment.singleSectionDueDate(), assignment.dueAt()
+    ENV.PERMISSIONS = {}
+
   module "Assignment#toView"
 
   test "returns the assignment's name", ->
@@ -492,7 +500,7 @@ define [
     deepEqual json.acceptsMediaRecording, true
 
   test "includes submissionType", ->
-    assignment = new Assignment name: 'foo'
+    assignment = new Assignment name: 'foo', id: '16'
     assignment.set 'submission_types', [ 'on_paper' ]
     json = assignment.toView()
     deepEqual json.submissionType, 'on_paper'
@@ -508,6 +516,11 @@ define [
     assignment.set 'submission_types', [ 'online_url' ]
     json = assignment.toView()
     deepEqual json.acceptsOnlineURL, true
+
+  test "returns online for new records", ->
+    assignment = new Assignment name: 'foo'
+    json = assignment.toView()
+    deepEqual json.isOnlineSubmission, true
 
   test "includes allowedExtensions", ->
     assignment = new Assignment name: 'foo'
@@ -534,6 +547,18 @@ define [
     assignment = new Assignment all_dates: [{title: "Summer"}, {title: "Winter"}]
     json = assignment.toView()
     equal json.allDates.length, 2
+
+  test "includes singleSectionDueDate", ->
+    dueAt = new Date("2013-11-27T11:01:00Z")
+    assignment = new Assignment all_dates: [
+      {due_at: null, title: "Everyone"},
+      {due_at: dueAt, title: "Summer"}
+    ]
+    false_stub = sinon.stub assignment, "multipleDueDates"
+    false_stub.returns false
+    json = assignment.toView()
+    equal json.singleSectionDueDate, dueAt.toISOString()
+    false_stub.restore()
 
   test "includes isQuiz", ->
     assignment = new Assignment("submission_types":["online_quiz"])

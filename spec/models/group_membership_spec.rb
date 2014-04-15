@@ -60,7 +60,7 @@ describe GroupMembership do
     # expect
     membership = group.group_memberships.build(:user => user_model, :workflow_state => 'accepted')
     membership.should_not be_valid
-    membership.errors[:group_id].should == "The group is full."
+    membership.errors[:group_id].should == ["The group is full."]
   end
 
   context "section homogeneity" do
@@ -79,7 +79,7 @@ describe GroupMembership do
       membership.stubs(:has_common_section_with_me?).returns(false)
       membership.save.should_not be_true
       membership.errors.size.should == 1
-      membership.errors.on(:user_id).should match(/test user does not share a section/)
+      membership.errors[:user_id].to_s.should match(/test user does not share a section/)
     end
 
     it "should pass validation on update" do
@@ -88,7 +88,7 @@ describe GroupMembership do
       }.should_not raise_error(ActiveRecord::RecordInvalid)
     end
   end
-  
+
   it "should dispatch a 'new_student_organized_group' message if the first membership in a student organized group" do
     course_with_teacher
     student = user_model
@@ -101,7 +101,21 @@ describe GroupMembership do
     group_membership = group.group_memberships.create(:user => student)
     group_membership.messages_sent.should be_include("New Student Organized Group")
   end
-  
+
+  it "should not dispatch a message if the membership has been created with SIS" do
+    course_with_teacher(active_all: true)
+    student    = user_model
+    group      = @course.groups.create(group_category: GroupCategory.student_organized_for(@course))
+    membership = group.group_memberships.build(user: student)
+    @course.enroll_student(student).accept!
+    Notification.create!(name: 'New Context Group Membership', category: 'TestImmediately')
+    Notification.create!(name: 'New Context Group Membership Invitation', category: 'TestImmediately')
+    batch = @course.root_account.sis_batches.create!
+    membership.sis_batch_id = batch.id
+    membership.save!
+    membership.messages_sent.should be_empty
+  end
+
   it "should be invalid if group wants a common section, but doesn't have one with the user" do
     course_with_teacher(:active_all => true)
     section1 = @course.course_sections.create
@@ -232,56 +246,6 @@ describe GroupMembership do
       community_group.add_user(@admin, 'accepted', true)
       community_group.add_user(@teacher, 'accepted', false)
       GroupMembership.where(:group_id => community_group.id, :user_id => @teacher.id).first.grants_right?(@admin, :delete).should be_true
-    end
-  end
-
-  context 'following' do
-    before do
-      user_model
-      @communities = GroupCategory.communities_for(Account.default)
-      group_model(:name => "Algebra Teachers", :group_category => @communities, :join_level => "parent_context_request")
-    end
-
-    it "should auto-follow the group when joining the group" do
-      @group.add_user(@user, 'accepted')
-      @user.reload.user_follows.where(:followed_item_id => @group, :followed_item_type => 'Group').first.should_not be_nil
-    end
-
-    it "should auto-follow the group when a request is accepted" do
-      @membership = @group.add_user(@user, 'requested')
-      @user.reload.user_follows.where(:followed_item_id => @group, :followed_item_type => 'Group').first.should be_nil
-      @membership.workflow_state = 'accepted'
-      @membership.save!
-      @user.reload.user_follows.where(:followed_item_id => @group, :followed_item_type => 'Group').first.should_not be_nil
-    end
-
-    it "should auto-follow the group when an invitation is accepted" do
-      @membership = @group.add_user(@user, 'invited')
-      @user.reload.user_follows.where(:followed_item_id => @group, :followed_item_type => 'Group').first.should be_nil
-      @membership.workflow_state = 'accepted'
-      @membership.save!
-      @user.reload.user_follows.where(:followed_item_id => @group, :followed_item_type => 'Group').first.should_not be_nil
-    end
-  end
-
-  context 'unfollowing' do
-    before do
-      user_model
-      @communities = GroupCategory.communities_for(Account.default)
-      group_model(:name => "Algebra Teachers", :group_category => @communities, :join_level => "parent_context_request")
-    end
-
-    it "should auto-unfollow the group when leaving the group" do
-      @membership = @group.add_user(@user, 'accepted')
-      @membership.workflow_state = 'deleted'
-      @membership.save!
-      @user.reload.user_follows.find(:first, :conditions => { :followed_item_id => @group.id, :followed_item_type => 'Group' }).should be_nil
-    end
-
-    it "should auto-unfollow the group when the membership is destroyed" do
-      @membership = @group.add_user(@user, 'accepted')
-      @membership.destroy
-      @user.reload.user_follows.find(:first, :conditions => { :followed_item_id => @group.id, :followed_item_type => 'Group' }).should be_nil
     end
   end
 

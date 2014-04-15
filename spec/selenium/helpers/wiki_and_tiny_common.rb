@@ -22,11 +22,11 @@ require File.expand_path(File.dirname(__FILE__) + '/../common')
     @text_file = @root_folder.attachments.create!(:filename => 'text_file.txt', :context => @course) { |a| a.content_type = 'text/plain' }
     @image1 = @root_folder.attachments.build(:context => @course)
     path = File.expand_path(File.dirname(__FILE__) + '/../../../public/images/email.png')
-    @image1.uploaded_data = ActionController::TestUploadedFile.new(path, Attachment.mimetype(path))
+    @image1.uploaded_data = Rack::Test::UploadedFile.new(path, Attachment.mimetype(path))
     @image1.save!
     @image2 = @root_folder.attachments.build(:context => @course)
     path = File.expand_path(File.dirname(__FILE__) + '/../../../public/images/graded.png')
-    @image2.uploaded_data = ActionController::TestUploadedFile.new(path, Attachment.mimetype(path))
+    @image2.uploaded_data = Rack::Test::UploadedFile.new(path, Attachment.mimetype(path))
     @image2.save!
     get "/courses/#{@course.id}/wiki"
 
@@ -35,9 +35,9 @@ require File.expand_path(File.dirname(__FILE__) + '/../common')
   end
 
   def add_text_to_tiny(text)
-    f('.wiki_switch_views_link').click
+    fj('.wiki_switch_views_link:visible').click
     clear_wiki_rce
-    f('.wiki_switch_views_link').click
+    fj('.wiki_switch_views_link:visible').click
     type_in_tiny('#wiki_page_body', text)
     in_frame "wiki_page_body_ifr" do
       f('#tinymce').send_keys(:return)
@@ -46,9 +46,9 @@ require File.expand_path(File.dirname(__FILE__) + '/../common')
   end
 
   def add_text_to_tiny_no_val(text)
-    f('.wiki_switch_views_link').click
+    fj('.wiki_switch_views_link:visible').click
     clear_wiki_rce
-    f('.wiki_switch_views_link').click
+    fj('.wiki_switch_views_link:visible').click
     type_in_tiny('#wiki_page_body', text)
   end
 
@@ -66,8 +66,10 @@ require File.expand_path(File.dirname(__FILE__) + '/../common')
     end
   end
 
-  def create_wiki_page(title, hfs, edit_roles)
-    @course.wiki.wiki_pages.create(:title => title, :hide_from_students => hfs, :editing_roles => edit_roles, :notify_of_update => true)
+  def create_wiki_page(title, unpublished, edit_roles)
+    wiki_page = @course.wiki.wiki_pages.create(:title => title, :editing_roles => edit_roles, :notify_of_update => true)
+    wiki_page.unpublish! if unpublished
+    wiki_page
   end
 
   def select_all_wiki
@@ -118,9 +120,9 @@ require File.expand_path(File.dirname(__FILE__) + '/../common')
 
   def add_image_to_rce
     wait_for_tiny(keep_trying_until { f("#new_wiki_page") })
-    f('.wiki_switch_views_link').click
+    fj('.wiki_switch_views_link:visible').click
     clear_wiki_rce
-    f('.wiki_switch_views_link').click
+    fj('.wiki_switch_views_link:visible').click
     f('#editor_tabs .ui-tabs-nav li:nth-child(3) a').click
     f('.upload_new_image_link').click
     wiki_page_tools_upload_file('#sidebar_upload_image_form', :image)

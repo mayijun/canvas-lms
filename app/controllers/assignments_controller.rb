@@ -24,7 +24,6 @@ class AssignmentsController < ApplicationController
   include Api::V1::AssignmentGroup
   include Api::V1::Outcome
 
-  include GoogleDocs
   include KalturaHelper
   before_filter :require_context
   add_crumb(proc { t '#crumbs.assignments', "Assignments" }, :except => [:destroy, :syllabus, :index]) { |c| c.send :course_assignments_path, c.instance_variable_get("@context") }
@@ -32,13 +31,18 @@ class AssignmentsController < ApplicationController
   before_filter :normalize_title_param, :only => [:new, :edit]
 
   def index
-    return old_index if @context == @current_user || !@context.draft_state_enabled?
+    return old_index if @context == @current_user || !@context.feature_enabled?(:draft_state)
 
     if authorized_action(@context, @current_user, :read)
       return unless tab_enabled?(@context.class::TAB_ASSIGNMENTS)
+      add_crumb(t('#crumbs.assignments', "Assignments"), named_context_url(@context, :context_assignments_url))
+
+      # It'd be nice to do this as an after_create, but it's not that simple
+      # because of course import/copy.
+      @context.require_assignment_group
 
       permissions = @context.grants_rights?(@current_user, :manage_assignments, :manage_grades)
-      permissions[:manage] = permissions[:manage_assignments] || permissions[:manage_grades]
+      permissions[:manage] = permissions[:manage_assignments]
       js_env({
         :URLS => {
           :new_assignment_url => new_polymorphic_url([@context, :assignment]),
@@ -75,7 +79,7 @@ class AssignmentsController < ApplicationController
           else
             format.html { redirect_to root_url }
           end
-        elsif @just_viewing_one_course && @context.assignments.new.grants_right?(@current_user, session, :update)
+        elsif @just_viewing_one_course && @context.assignments.scoped.new.grants_right?(@current_user, session, :update)
           format.html {
             render :action => :index
           }
@@ -83,6 +87,7 @@ class AssignmentsController < ApplicationController
           @current_user_submissions ||= @current_user && @current_user.submissions.
               select([:id, :assignment_id, :score, :workflow_state]).
               where(:assignment_id => @upcoming_assignments)
+          js_env(:submissions_hash => @submissions_hash)
           format.html { render :action => :student_index }
         end
         # TODO: eager load the rubric associations
@@ -105,7 +110,7 @@ class AssignmentsController < ApplicationController
       @assignment.ensure_assignment_group
       js_env({
         :ROOT_OUTCOME_GROUP => outcome_group_json(@context.root_outcome_group, @current_user, session),
-        :DRAFT_STATE => @context.draft_state_enabled?,
+        :DRAFT_STATE => @context.feature_enabled?(:draft_state),
         :COURSE_ID => @context.id,
         :ASSIGNMENT_ID => @assignment.id
       })
@@ -128,8 +133,11 @@ class AssignmentsController < ApplicationController
       end
 
       begin
-        @google_docs_token = google_docs_retrieve_access_token
-      rescue RuntimeError => ex; end
+        google_docs = GoogleDocs.new(google_docs_user, session)
+        @google_docs_token = google_docs.retrieve_access_token
+      rescue GoogleDocs::NoTokenError
+        #do nothing
+      end
 
       add_crumb(@assignment.title, polymorphic_url([@context, @assignment]))
       log_asset_access(@assignment, "assignments", @assignment.assignment_group)
@@ -155,8 +163,12 @@ class AssignmentsController < ApplicationController
     assignment ||= @context.assignments.find(params[:id])
     # prevent masquerading users from accessing google docs
     if assignment.allow_google_docs_submission? && @real_current_user.blank?
+      docs = {}
       begin
-        docs = google_docs_list_with_extension_filter(assignment.allowed_extensions)
+        google_docs = GoogleDocs.new(google_docs_user, session)
+        docs = google_docs.list_with_extension_filter(assignment.allowed_extensions)
+      rescue NoTokenError
+        #do nothing
       rescue => e
         ErrorReport.log_exception(:oauth, e)
         raise e
@@ -299,7 +311,7 @@ class AssignmentsController < ApplicationController
     params[:assignment][:time_zone_edited] = Time.zone.name if params[:assignment]
     group = get_assignment_group(params[:assignment])
     @assignment ||= @context.assignments.build(params[:assignment])
-    @assignment.workflow_state = "published"
+    @assignment.workflow_state ||= @context.feature_enabled?(:draft_state) ? "unpublished" : "published"
     @assignment.updating_user = @current_user
     @assignment.content_being_saved_by(@current_user)
     @assignment.assignment_group = group if group
@@ -320,12 +332,12 @@ class AssignmentsController < ApplicationController
   end
 
   def new
-    @assignment ||= @context.assignments.new
-    @assignment.workflow_state = 'unpublished' if @context.draft_state_enabled?
+    @assignment ||= @context.assignments.scoped.new
+    @assignment.workflow_state = 'unpublished' if @context.feature_enabled?(:draft_state)
     add_crumb t :create_new_crumb, "Create new"
 
     if params[:submission_types] == 'online_quiz'
-      redirect_to new_polymorphic_url([@context, :quiz], index_edit_params)
+      redirect_to new_course_quiz_url(@context, index_edit_params)
     elsif params[:submission_types] == 'discussion_topic'
       redirect_to new_polymorphic_url([@context, :discussion_topic], index_edit_params)
     else
@@ -344,7 +356,7 @@ class AssignmentsController < ApplicationController
       @assignment.ensure_assignment_group(false)
 
       if @assignment.submission_types == 'online_quiz' && @assignment.quiz
-        return redirect_to edit_polymorphic_url([@context, @assignment.quiz], index_edit_params)
+        return redirect_to edit_course_quiz_url(@context, @assignment.quiz, index_edit_params)
       elsif @assignment.submission_types == 'discussion_topic' && @assignment.discussion_topic
         return redirect_to edit_polymorphic_url([@context, @assignment.discussion_topic], index_edit_params)
       end
@@ -354,8 +366,12 @@ class AssignmentsController < ApplicationController
         select { |c| !c.student_organized? }.
         map { |c| { :id => c.id, :name => c.name } }
 
+      json_for_assignment_groups = assignment_groups.map do |group|
+        assignment_group_json(group, @current_user, session, [], {stringify_json_ids: true})
+      end
+
       hash = {
-        :ASSIGNMENT_GROUPS => assignment_groups.map{|g| assignment_group_json(g, @current_user, session, [], {stringify_json_ids: stringify_json_ids?}) },
+        :ASSIGNMENT_GROUPS => json_for_assignment_groups,
         :GROUP_CATEGORIES => group_categories,
         :KALTURA_ENABLED => !!feature_enabled?(:kaltura),
         :SECTION_LIST => (@context.course_sections.active.map { |section|
@@ -365,7 +381,9 @@ class AssignmentsController < ApplicationController
           (assignment_overrides_json(@assignment.overrides_visible_to(@current_user))),
         :ASSIGNMENT_INDEX_URL => polymorphic_url([@context, :assignments]),
       }
+
       hash[:ASSIGNMENT] = assignment_json(@assignment, @current_user, session, override_dates: false)
+      hash[:ASSIGNMENT][:has_submitted_submissions] = @assignment.has_submitted_submissions?
       hash[:URL_ROOT] = polymorphic_url([:api_v1, @context, :assignments])
       hash[:CANCEL_TO] = @assignment.new_record? ? polymorphic_url([@context, :assignments]) : polymorphic_url([@context, @assignment])
       hash[:CONTEXT_ID] = @context.id

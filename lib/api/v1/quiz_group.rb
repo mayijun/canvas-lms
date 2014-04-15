@@ -41,6 +41,10 @@ module Api::V1::QuizGroup
       )
   }
 
+  def quiz_groups_compound_json(quiz_groups, context, user, session)
+    { quiz_groups: quiz_groups_json(quiz_groups, context, user, session) }
+  end
+
   def quiz_groups_json(quiz_groups, context, user, session)
     quiz_groups.map do |quiz_group|
       quiz_group_json(quiz_group, context, user, session)
@@ -56,7 +60,7 @@ module Api::V1::QuizGroup
   end
 
   def update_api_quiz_group(quiz_group, quiz_group_params)
-    return nil unless quiz_group.is_a?(QuizGroup) && quiz_group_params.is_a?(Hash)
+    return nil unless quiz_group.is_a?(Quizzes::QuizGroup) && quiz_group_params.is_a?(Hash)
 
     quiz_group.attributes = filter_params(quiz_group_params)
     quiz_group.save

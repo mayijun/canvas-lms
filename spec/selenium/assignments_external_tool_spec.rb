@@ -1,7 +1,7 @@
 require File.expand_path(File.dirname(__FILE__) + '/common')
 
 describe "external tool assignments" do
-  it_should_behave_like "in-process server selenium tests"
+  include_examples "in-process server selenium tests"
 
   before (:each) do
     course_with_teacher_logged_in
@@ -22,10 +22,12 @@ describe "external tool assignments" do
     replace_content(f('#assignment_points_possible'), '5')
     click_option('.assignment_submission_types', 'External Tool')
     expect_new_page_load { f('.more_options_link').click }
+    click_option('#assignment_submission_type', 'External Tool')
     f('#assignment_external_tool_tag_attributes_url').click
     keep_trying_until do
       fj('#context_external_tools_select td .tools .tool:first-child:visible').click
-      sleep 2 # wait for javascript to execute
+      wait_for_ajaximations
+      #sleep 2 # wait for javascript to execute
       f('#context_external_tools_select input#external_tool_create_url').should have_attribute('value', @t1.url)
     end
     keep_trying_until do
@@ -34,7 +36,6 @@ describe "external tool assignments" do
     end
     fj('.add_item_button:visible').click
     f('#assignment_external_tool_tag_attributes_url').should have_attribute('value', @t2.url)
-
     expect_new_page_load { submit_form('#edit_assignment_form') }
 
     a = @course.assignments(true).last

@@ -1,35 +1,37 @@
 require 'hash_view'
 
 class RouteView < HashView
-  def initialize(yard_method_object)
-    @object = yard_method_object
-    @controller = @object.parent.path.underscore.sub("_controller", '')
-    @action = @object.path.sub(/^.*#/, '').sub(/_with_.*$/, '')
-  end
+  attr_reader :raw_route, :method_view
 
-  def route
-    @route ||= begin
-      routes = ApiRouteSet::V1.api_methods_for_controller_and_action(@controller, @action)
-      # Choose shortest route (preferrably without .json suffix)
-      routes.sort_by { |r| r.segments.join.size }.first
-    end
+  def initialize(raw_route, method_view)
+    @raw_route = raw_route
+    @method_view = method_view
   end
 
   def route_name
-    ActionController::Routing::Routes.named_routes.routes.index(route).to_s.sub("api_v1_", "")
+    ActionController::Routing::Routes.named_routes.routes.index(raw_route).to_s.sub("api_v1_", "")
   end
 
   def file_path
-    filepath = "app/controllers/#{@controller}_controller.rb"
+    filepath = "app/controllers/#{@method_view.controller}_controller.rb"
     filepath = nil unless File.file?(File.join(Rails.root, filepath))
     filepath
   end
 
   def api_path
-    path = route.segments.inject("") { |str,s| str << s.to_s }
-    path.chop! if path.length > 1 # remove trailing slash
+    if CANVAS_RAILS2
+      path = raw_route.segments.inject("") { |str,s| str << s.to_s }
+    else
+      path = remove_parentheticals(raw_route.path.spec.to_s)
+    end
+    path.chop! if path.length > 1 && path[-1] == '/' # remove trailing slash
     path
   end
+
+  def remove_parentheticals(str)
+    str.gsub(/\([^\)]+\)/, '')
+  end
+
 
   def path_variables
     api_path.scan(%r{:(\w+)}).map{ |v| v.first }
@@ -42,18 +44,66 @@ class RouteView < HashView
   end
 
   def verb
-    route.conditions[:method].to_s.upcase
+    if CANVAS_RAILS2
+      raw_route.conditions[:method].to_s.upcase
+    else
+      if raw_route.verb.source =~ /\^?(\w*)\$/
+        $1.upcase
+      end
+    end
   end
 
-  def reqs
-    route.requirements
+  def query_args
+    method_view.raw_arguments.map do |tag|
+      ArgumentView.new(tag.text, verb, path_variables)
+    end
+  end
+
+  def query_arg_names
+    query_args.map{ |arg| arg.name }
+  end
+
+  def path_args
+    (path_variables - query_arg_names).map do |path_variable|
+      ArgumentView.new("#{path_variable} [String] ID", verb, path_variables)
+    end
+  end
+
+  def arguments
+    path_args + query_args
+  end
+
+  def parameters
+    arguments.map { |arg| arg.to_swagger }
+  end
+
+  def nickname
+    method_view.nickname + method_view.unique_nickname_suffix(self)
+  end
+
+  def operation
+    {
+      "method" => verb,
+      "summary" => method_view.summary,
+      "notes" => method_view.desc,
+      "nickname" => nickname,
+      "parameters" => parameters,
+    }.merge(method_view.swagger_type)
+  end
+
+  def to_swagger
+    {
+      "path" => swagger_path,
+      "description" => method_view.desc,
+      "operations" => [operation]
+    }
   end
 
   def to_hash
     {
       "verb" => verb,
       "api_path" => api_path,
-      "reqs" => reqs,
+      "reqs" => raw_route.requirements,
       "name" => route_name,
       "file_path" => file_path,
     }

@@ -1,6 +1,7 @@
 define [
   'i18n!assignments'
   'Backbone'
+  'jquery'
   'underscore'
   'compiled/views/PublishIconView'
   'compiled/views/assignments/DateDueColumnView'
@@ -11,11 +12,13 @@ define [
   'jst/assignments/AssignmentListItem'
   'jst/assignments/_assignmentListItemScore'
   'compiled/util/round'
+  'compiled/views/assignments/AssignmentKeyBindingsMixin'
   'jqueryui/tooltip'
   'compiled/behaviors/tooltip'
-], (I18n, Backbone, _, PublishIconView, DateDueColumnView, DateAvailableColumnView, CreateAssignmentView, MoveDialogView, preventDefault, template, scoreTemplate, round) ->
+], (I18n, Backbone, $, _, PublishIconView, DateDueColumnView, DateAvailableColumnView, CreateAssignmentView, MoveDialogView, preventDefault, template, scoreTemplate, round, AssignmentKeyBindingsMixin) ->
 
   class AssignmentListItemView extends Backbone.View
+    @mixin AssignmentKeyBindingsMixin
     tagName: "li"
     className: "assignment"
     template: template
@@ -33,6 +36,7 @@ define [
     events:
       'click .delete_assignment': 'onDelete'
       'click .tooltip_link': preventDefault ->
+      'keydown': 'handleKeys'
 
     messages:
       confirm: I18n.t('confirms.delete_assignment', 'Are you sure you want to delete this assignment?')
@@ -59,7 +63,6 @@ define [
     initializeChildViews: ->
       @publishIconView    = false
       @editAssignmentView = false
-      @vddDueColumnView   = false
       @dateAvailableColumnView = false
       @moveAssignmentView = false
 
@@ -105,7 +108,7 @@ define [
         @moveAssignmentView.hide()
         @moveAssignmentView.setTrigger @$moveAssignmentButton
 
-      @updateScore() unless @canManage()
+      @updateScore() unless (@canManage() || !@userIsStudent())
 
     toggleHidden: (model, hidden) =>
       @$el.toggleClass('hidden', hidden)
@@ -164,23 +167,114 @@ define [
     canManage: ->
       ENV.PERMISSIONS.manage
 
+    gradeStrings: (grade) ->
+      pass_fail_map =
+        incomplete:
+          I18n.t 'incomplete', 'Incomplete'
+        complete:
+          I18n.t 'complete', 'Complete'
+
+      grade = pass_fail_map[grade] or grade
+
+      'percent':
+        nonscreenreader: I18n.t 'grade_percent', '%{grade}%', grade: grade
+        screenreader: I18n.t 'grade_percent_screenreader', 'Grade: %{grade}%', grade: grade
+      'pass_fail':
+        nonscreenreader: "#{grade}"
+        screenreader: I18n.t 'grade_pass_fail_screenreader', 'Grade: %{grade}', grade: grade
+      'letter_grade':
+        nonscreenreader: "#{grade}"
+        screenreader: I18n.t 'grade_letter_grade_screenreader', 'Grade: %{grade}', grade: grade
+      'gpa_scale':
+        nonscreenreader: "#{grade}"
+        screenreader: I18n.t 'grade_gpa_scale_screenreader', 'Grade: %{grade}', grade: grade
+
+
     _setJSONForGrade: (json) ->
       if submission = @model.get('submission')
-        submissionJSON = submission.toJSON()
-        grade = submission.get('grade')
-        if typeof grade is 'number' && !isNaN(grade)
-          submissionJSON.grade = round grade, round.DEFAULT
+        submissionJSON = if submission.present then submission.present() else submission.toJSON()
+        score = submission.get('score')
+        if typeof score is 'number' && !isNaN(score)
+          submissionJSON.score = round score, round.DEFAULT
         json.submission = submissionJSON
+        grade = submission.get('grade')
+        gradeString = @gradeStrings(grade)[json.gradingType]
+        json.submission.gradeDisplay = gradeString?.nonscreenreader
+        json.submission.gradeDisplayForScreenreader = gradeString?.screenreader
+
       pointsPossible = json.pointsPossible
 
       if typeof pointsPossible is 'number' && !isNaN(pointsPossible)
         json.pointsPossible = round pointsPossible, round.DEFAULT
         json.submission.pointsPossible = json.pointsPossible if json.submission?
 
+      json.submission.gradingType = json.gradingType if json.submission?
+
+
+      if json.gradingType is 'not_graded'
+        json.hideGrade = true
       json
 
     updateScore: =>
       json = @model.toView()
       json = @_setJSONForGrade(json) unless @canManage()
-
       @$('.js-score').html scoreTemplate(json)
+
+    userIsStudent: ->
+      _.include(ENV.current_user_roles, "student")
+
+    goToNextItem: =>
+      if @nextAssignmentInGroup()?
+        @focusOnAssignment(@nextAssignmentInGroup())
+      else if @nextVisibleGroup()?
+        @focusOnGroup(@nextVisibleGroup())
+      else
+        @focusOnFirstGroup()
+
+    goToPrevItem: =>
+      if @previousAssignmentInGroup()?
+        @focusOnAssignment(@previousAssignmentInGroup())
+      else
+        @focusOnGroupByID(@model.attributes.assignment_group_id)
+
+    editItem: =>
+      @$("#assignment_#{@model.id}_settings_edit_item").click()
+
+    deleteItem: =>
+      @$("#assignment_#{@model.id}_settings_delete_item").click()
+
+    addItem: =>
+      group_id = @model.attributes.assignment_group_id
+      $(".add_assignment", "#assignment_group_#{group_id}").click()
+
+    showAssignment: =>
+      $(".ig-title", "#assignment_#{@model.id}")[0].click()
+
+    assignmentGroupView: =>
+      @model.collection.view
+
+    visibleAssignments: =>
+      @assignmentGroupView().visibleAssignments()
+
+    nextVisibleGroup: =>
+      @assignmentGroupView().nextGroup()
+
+    nextAssignmentInGroup: =>
+      current_assignment_index = @visibleAssignments().indexOf(@model)
+      @visibleAssignments()[current_assignment_index + 1]
+
+    previousAssignmentInGroup: =>
+      current_assignment_index = @visibleAssignments().indexOf(@model)
+      @visibleAssignments()[current_assignment_index - 1]
+
+    focusOnAssignment: (assignment) =>
+      $("#assignment_#{assignment.id}").attr("tabindex",-1).focus()
+
+    focusOnGroup: (group) =>
+      $("#assignment_group_#{group.attributes.id}").attr("tabindex",-1).focus()
+
+    focusOnGroupByID: (group_id) =>
+      $("#assignment_group_#{group_id}").attr("tabindex",-1).focus()
+
+    focusOnFirstGroup: =>
+      $(".assignment_group").filter(":visible").first().attr("tabindex",-1).focus()

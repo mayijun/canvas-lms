@@ -40,6 +40,7 @@ class Conversation < ActiveRecord::Base
 
   def reload(options = nil)
     @current_context_strings = {}
+    @participants = nil
     super
   end
 
@@ -75,7 +76,7 @@ class Conversation < ActiveRecord::Base
   end
 
   def self.initiate(users, private, options = {})
-    users = users.uniq_by(&:id)
+    users = users.uniq(&:id)
     user_ids = users.map(&:id)
     private_hash = private ? private_hash_for(users) : nil
     transaction do
@@ -309,7 +310,11 @@ class Conversation < ActiveRecord::Base
       save! if new_tags.present? || root_account_ids_changed?
 
       # so we can take advantage of other preloaded associations
-      ConversationMessage.send :add_preloaded_record_to_collection, [message], :conversation, self
+      if CANVAS_RAILS2
+        ConversationMessage.send :add_preloaded_record_to_collection, [message], :conversation, self
+      else
+        message.association(:conversation).target = self
+      end
       message.save_without_broadcasting!
 
       add_message_to_participants(message, options.merge(
@@ -384,7 +389,7 @@ class Conversation < ActiveRecord::Base
         cps = cps.where("user_id NOT IN (?)", skip_users.map(&:user_id)) if skip_users.present?
       end
 
-      cps = cps.where(:user_id => options[:only_users].map(&:id)) if options[:only_users]
+      cps = cps.where(:user_id => (options[:only_users]+[message.author]).map(&:id)) if options[:only_users]
 
       next unless cps.exists?
 
@@ -411,7 +416,8 @@ class Conversation < ActiveRecord::Base
             cp.update_attribute(:tags, updated_tags)
             if cp.user.shard != self.shard
               cp.user.shard.activate do
-                ConversationParticipant.where(:conversation_id => self, :user_id => cp.user_id).update_all(:tags => serialized_tags(cp.tags))
+                ConversationParticipant.where(:conversation_id => self, :user_id => cp.user_id).
+                  update_all(:tags => serialized_tags(cp.tags))
               end
             end
           end
@@ -446,6 +452,14 @@ class Conversation < ActiveRecord::Base
   def context_name
     name = context.try(:name)
     name ||= Context.find_by_asset_string(context_tags.first).try(:name) if context_tags.first
+  end
+
+  def context_code
+    if context_type && context_id
+      "#{context_type.underscore}_#{context_id}"
+    else
+      nil
+    end
   end
 
   def context_tags
@@ -569,10 +583,12 @@ class Conversation < ActiveRecord::Base
   def regenerate_private_hash!(user_ids = nil)
     return unless private?
     self.private_hash = Conversation.private_hash_for(user_ids ||
-      Shard.birth.activate { self.conversation_participants.map(&:user_id) } )
+      Shard.birth.activate { self.conversation_participants.reload.map(&:user_id) } )
     return unless private_hash_changed?
     existing = self.shard.activate do
-      ConversationParticipant.find_by_private_hash(private_hash).try(:conversation)
+      ConversationParticipant.send(:with_exclusive_scope) do
+        ConversationParticipant.find_by_private_hash(private_hash).try(:conversation)
+      end
     end
     if existing
       merge_into(existing)
@@ -595,7 +611,7 @@ class Conversation < ActiveRecord::Base
   def merge_into(other)
     transaction do
       new_participants = other.conversation_participants.index_by(&:user_id)
-      ConversationParticipant.skip_callback(:destroy_conversation_message_participants) do
+      ConversationParticipant.suspend_callbacks(:destroy_conversation_message_participants) do
         conversation_participants(true).each do |cp|
           if new_cp = new_participants[cp.user_id]
             new_cp.update_attribute(:workflow_state, cp.workflow_state) if cp.unread? || new_cp.archived?
@@ -624,7 +640,7 @@ class Conversation < ActiveRecord::Base
             if cp.user.shard != self.shard
               cp.user.shard.activate do
                 ConversationParticipant.where(:conversation_id => self, :user_id => cp.user_id).
-                    update_all(:conversation_id => other)
+                  update_all(:conversation_id => other)
               end
             end
             # create a new duplicate cp on the target conversation's shard
@@ -639,7 +655,6 @@ class Conversation < ActiveRecord::Base
           end
         end
       end
-
       if other.shard == self.shard
         conversation_messages.update_all(:conversation_id => other)
       else
@@ -660,9 +675,13 @@ class Conversation < ActiveRecord::Base
           ConversationMessageParticipant.joins(:conversation_message).
               where(:conversation_messages => { :conversation_id => self.id }).
               delete_all
-          # bare scoped call avoids HasManyAssociation's delete_all, which loads
-          # all records in Rails 2
-          self.conversation_messages.scoped.delete_all
+          if CANVAS_RAILS2
+            # bare scoped call avoids HasManyAssociation's delete_all, which loads
+            # all records in Rails 2
+            self.conversation_messages.scoped.delete_all
+          else
+            self.conversation_messages.delete_all
+          end
         end
       end
 
@@ -710,8 +729,8 @@ class Conversation < ActiveRecord::Base
     # post-sort and -uniq in Ruby
     if shards.length > 1
       participants.each do |key, value|
-        participants[key] = value.uniq_by(&:id).sort_by do |user|
-          [user.last_authored_at ? -user.last_authored_at.to_f : SortLast, Canvas::ICU.collation_key(user.short_name || user.name)]
+        participants[key] = value.uniq(&:id).sort_by do |user|
+          [user.last_authored_at ? -user.last_authored_at.to_f : CanvasSort::Last, Canvas::ICU.collation_key(user.short_name || user.name)]
         end
       end
     end
@@ -752,15 +771,20 @@ class Conversation < ActiveRecord::Base
 
   def delete_for_all
     stream_item.try(:destroy_stream_item_instances)
-    # bare scoped call avoid Rails 2 HasManyAssociation loading all objects
-    shard.activate { conversation_message_participants.scoped.delete_all }
+    shard.activate do
+      conversation_message_participants.scoped.delete_all
+    end
     conversation_participants.with_each_shard { |scope| scope.scoped.delete_all; nil }
   end
 
   protected
 
   def maybe_update_timestamp(col, val, additional_conditions=[])
-    condition = self.class.merge_conditions(["(#{col} IS NULL OR #{col} < ?)", val], additional_conditions)
+    if CANVAS_RAILS2
+      condition = self.class.merge_conditions(["(#{col} IS NULL OR #{col} < ?)", val], additional_conditions)
+    else
+      condition = self.class.where(["(#{col} IS NULL OR #{col} < ?)", val]).where(additional_conditions).where_values.join(' AND ')
+    end
     sanitize_sql ["#{col} = CASE WHEN #{condition} THEN ? ELSE #{col} END", val]
   end
 end

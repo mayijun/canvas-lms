@@ -52,8 +52,9 @@ class PseudonymsController < ApplicationController
         scope,
         self, api_v1_account_pseudonyms_url)
     else
-      scope = @user.all_active_pseudonyms
-      @pseudonyms = Api.paginate(scope, self, api_v1_user_pseudonyms_url)
+      bookmark = BookmarkedCollection::SimpleBookmarker.new(Pseudonym, :id)
+      @pseudonyms = BookmarkedCollection.with_each_shard(bookmark, @user.pseudonyms) { |scope| scope.active }
+      @pseudonyms = Api.paginate(@pseudonyms, self, api_v1_user_pseudonyms_url)
     end
 
     render :json => @pseudonyms.map { |p| pseudonym_json(p, @current_user, session) }
@@ -219,10 +220,8 @@ class PseudonymsController < ApplicationController
   def get_user
     user_id = params[:user_id] || params[:user].try(:[], :id)
     @user = case
-            when api_request? && user_id
-              api_find(User, user_id)
             when user_id
-              User.find(user_id)
+              api_find(User, user_id)
             else
               @current_user
             end
@@ -313,10 +312,10 @@ class PseudonymsController < ApplicationController
     @pseudonym = Pseudonym.active.find(params[:id])
     raise ActiveRecord::RecordNotFound unless @pseudonym.user_id == @user.id
     if @user.all_active_pseudonyms.length < 2
-      @pseudonym.errors.add_to_base(t('errors.login_required', "Users must have at least one login"))
+      @pseudonym.errors.add(:base, t('errors.login_required', "Users must have at least one login"))
       render :json => @pseudonym.errors, :status => :bad_request
     elsif @pseudonym.sis_user_id && !@pseudonym.account.grants_right?(@current_user, session, :manage_sis)
-      return render_unauthorized_action(@pseudonym)
+      return render_unauthorized_action
     elsif @pseudonym.destroy(@user.grants_right?(@current_user, session, :manage_logins))
       api_request? ?
         render(:json => pseudonym_json(@pseudonym, @current_user, session)) :

@@ -1,7 +1,7 @@
 require File.expand_path(File.dirname(__FILE__) + '/common')
 
 describe "self enrollment" do
-  it_should_behave_like "in-process server selenium tests"
+  include_examples "in-process server selenium tests"
 
   context "in a full course" do
     it "should not be allowed" do
@@ -113,10 +113,10 @@ describe "self enrollment" do
     }
     
     context "with open registration" do
-      it_should_behave_like "open registration"
+      include_examples "open registration"
     end
     context "without open registration" do
-      it_should_behave_like "closed registration"
+      include_examples "closed registration"
     end
   end
 
@@ -133,10 +133,10 @@ describe "self enrollment" do
       f('#dashboard').should include_text("You've enrolled in one or more courses that have not started yet")
     }
     context "with open registration" do
-      it_should_behave_like "open registration"
+      include_examples "open registration"
     end
     context "without open registration" do
-      it_should_behave_like "closed registration"
+      include_examples "closed registration"
     end
   end
 
@@ -149,10 +149,10 @@ describe "self enrollment" do
       f('#dashboard').should include_text("You've enrolled in one or more courses that have not started yet")
     }
     context "with open registration" do
-      it_should_behave_like "open registration"
+      include_examples "open registration"
     end
     context "without open registration" do
-      it_should_behave_like "closed registration"
+      include_examples "closed registration"
     end
   end
 

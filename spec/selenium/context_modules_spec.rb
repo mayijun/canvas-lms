@@ -1,9 +1,8 @@
 require File.expand_path(File.dirname(__FILE__) + '/helpers/context_modules_common')
 
 describe "context_modules" do
-  it_should_behave_like "in-process server selenium tests"
+  include_examples "in-process server selenium tests"
   context "as a teacher" do
-
     before (:each) do
       course_with_teacher_logged_in
 
@@ -36,7 +35,7 @@ describe "context_modules" do
     end
 
     def open_admin_module_menu
-      fj('#context_modules .admin-links .al-trigger').click
+      fj('#context_modules .admin-links.al-trigger').click
       wait_for_ajaximations
       sleep 1
     end
@@ -47,14 +46,14 @@ describe "context_modules" do
     end
 
     def publish_module
-      fj('#context_modules .admin-links .al-trigger').click
+      fj('#context_modules .admin-links.al-trigger').click
       keep_trying_until { f("#ui-id-2").should have_class('ui-state-open') }
       fj('#context_modules .change-workflow-state-link').click
       wait_for_ajaximations
     end
 
     def unpublish_module
-      fj('#context_modules .admin-links .al-trigger').click
+      fj('#context_modules .admin-links.al-trigger').click
       keep_trying_until { f("#ui-id-1").should have_class('ui-state-open') }
       fj('#context_modules .change-workflow-state-link').click
       wait_for_ajaximations
@@ -134,7 +133,7 @@ describe "context_modules" do
       @course.context_modules.first.workflow_state.should == "unpublished"
 
       keep_trying_until do
-        f('.admin-links .al-trigger').click
+        f('.admin-links.al-trigger').click
         hover_and_click('#context_modules .change-workflow-state-link')
         wait_for_ajax_requests
         f('.context_module').should have_class('published_module')
@@ -335,7 +334,7 @@ describe "context_modules" do
       refresh_page
 
       keep_trying_until do
-        f('.admin-links .al-trigger').click
+        f('.admin-links.al-trigger').click
         hover_and_click('#context_modules .edit_module_link')
         wait_for_ajax_requests
         f('#add_context_module_form').should be_displayed
@@ -378,7 +377,7 @@ describe "context_modules" do
 
       add_module('Delete Module')
       driver.execute_script("$('.context_module').addClass('context_module_hover')")
-      f('.admin-links .al-trigger').click
+      f('.admin-links.al-trigger').click
       wait_for_ajaximations
       f('.delete_module_link').click
       driver.switch_to.alert.should_not be_nil
@@ -395,7 +394,7 @@ describe "context_modules" do
       add_module('Edit Module')
       context_module = f('.context_module')
       driver.action.move_to(context_module).perform
-      f('.admin-links .al-trigger').click
+      f('.admin-links.al-trigger').click
       f('.edit_module_link').click
       f('.ui-dialog').should be_displayed
       edit_form = f('#add_context_module_form')
@@ -414,7 +413,7 @@ describe "context_modules" do
       # add completion criterion
       context_module = f('.context_module')
       driver.action.move_to(context_module).perform
-      f('.admin-links .al-trigger').click
+      f('.admin-links.al-trigger').click
       wait_for_ajaximations
       f('.edit_module_link').click
       wait_for_ajaximations
@@ -437,7 +436,7 @@ describe "context_modules" do
 
       # delete the criterion, then cancel the form
       driver.action.move_to(context_module).perform
-      f('.admin-links .al-trigger').click
+      f('.admin-links.al-trigger').click
       wait_for_ajaximations
       f('.edit_module_link').click
       wait_for_ajaximations
@@ -451,7 +450,7 @@ describe "context_modules" do
       # now delete the criterion frd
       # (if the previous step did even though it shouldn't have, this will error)
       driver.action.move_to(context_module).perform
-      f('.admin-links .al-trigger').click
+      f('.admin-links.al-trigger').click
       wait_for_ajaximations
       f('.edit_module_link').click
       wait_for_ajaximations
@@ -468,7 +467,7 @@ describe "context_modules" do
 
       # and also make sure the form remembers that it's gone (#8329)
       driver.action.move_to(context_module).perform
-      f('.admin-links .al-trigger').click
+      f('.admin-links.al-trigger').click
       f('.edit_module_link').click
       f('.ui-dialog').should be_displayed
       edit_form = f('#add_context_module_form')
@@ -555,40 +554,59 @@ describe "context_modules" do
       @assignment.context_module_tags.each { |tag| tag.title.should == 'again' }
     end
 
-    it "should not rename every text header when you rename one" do
+    it "should add the 'with-completion-requirements' class to rows that have requirements" do
+      set_course_draft_state
+      mod = @course.context_modules.create! name: 'TestModule'
+      tag = mod.add_item({:id => @assignment.id, :type => 'assignment'})
+
+      mod.completion_requirements = {tag.id => {:type => 'must_view'}}
+      mod.save
+
       get "/courses/#{@course.id}/modules"
 
-      add_module('TestModule')
+      ig_rows = ff("#context_module_item_#{tag.id} .with-completion-requirements")
+      ig_rows.should_not be_empty
+    end
 
-      # add a text header
-      f('.admin-links .al-trigger').click
-      f('.add_module_item_link').click
-      select_module_item('#add_module_item_select', 'Text Header')
-      wait_for_ajaximations
-      title_input = fj('input[name="title"]:visible')
-      replace_content(title_input, 'First text header')
-      fj('.add_item_button:visible').click
-      wait_for_ajaximations
-      tag1 = ContentTag.last
+    it "should add a title attribute to the text header" do
+      set_course_draft_state
+      text_header = 'This is a really long module text header that should be truncated to exactly 98 characters plus the ... part so 101 characters really'
+      mod = @course.context_modules.create! name: 'TestModule'
+      tag1 = mod.add_item(title: text_header, type: 'sub_header')
 
-      # and another one
-      f('.admin-links .al-trigger').click
-      f('.add_module_item_link').click
-      select_module_item('#add_module_item_select', 'Text Header')
-      wait_for_ajaximations
-      title_input = fj('input[name="title"]:visible')
-      replace_content(title_input, 'Second text header')
-      fj('.add_item_button:visible').click
-      wait_for_ajaximations
-      tag2 = ContentTag.last
+      get "/courses/#{@course.id}/modules"
+      locked_title = ff("#context_module_item_#{tag1.id} .locked_title[title]")
 
-      # rename the second
+      locked_title[0].attribute(:title).should == text_header
+    end
+
+    it "should not rename every text header when you rename one" do
+      mod = @course.context_modules.create! name: 'TestModule'
+      tag1 = mod.add_item(title: 'First text header', type: 'sub_header')
+      tag2 = mod.add_item(title: 'Second text header', type: 'sub_header')
+
+      get "/courses/#{@course.id}/modules"
       item2 = f("#context_module_item_#{tag2.id}")
       edit_module_item(item2) do |edit_form|
         replace_content(edit_form.find_element(:id, 'content_tag_title'), 'Renamed!')
       end
 
-      # verify the first did not change
+      item1 = f("#context_module_item_#{tag1.id}")
+      item1.should_not include_text('Renamed!')
+    end
+
+    it "should not rename every external tool link when you rename one" do
+      tool = @course.context_external_tools.create! name: 'WHAT', consumer_key: 'what', shared_secret: 'what', url: 'http://what.example.org'
+      mod = @course.context_modules.create! name: 'TestModule'
+      tag1 = mod.add_item(title: 'A', type: 'external_tool', id: tool.id, url: 'http://what.example.org/A')
+      tag2 = mod.add_item(title: 'B', type: 'external_tool', id: tool.id, url: 'http://what.example.org/B')
+
+      get "/courses/#{@course.id}/modules"
+      item2 = f("#context_module_item_#{tag2.id}")
+      edit_module_item(item2) do |edit_form|
+        replace_content(edit_form.find_element(:id, 'content_tag_title'), 'Renamed!')
+      end
+
       item1 = f("#context_module_item_#{tag1.id}")
       item1.should_not include_text('Renamed!')
     end
@@ -626,7 +644,7 @@ describe "context_modules" do
 
       header_text = 'new header text'
       add_module('Text Header Module')
-      f('.admin-links .al-trigger').click
+      f('.admin-links.al-trigger').click
       f('.add_module_item_link').click
       select_module_item('#add_module_item_select', 'Text Header')
       keep_trying_until do
@@ -656,7 +674,7 @@ describe "context_modules" do
       get "/courses/#{@course.id}/modules"
 
       add_module 'Test module'
-      f('.admin-links .al-trigger').click
+      f('.admin-links.al-trigger').click
       wait_for_ajaximations
       f('.add_module_item_link').click
       wait_for_ajaximations
@@ -695,7 +713,7 @@ describe "context_modules" do
       db_module = ContextModule.last
       context_module = f("#context_module_#{db_module.id}")
       driver.action.move_to(context_module).perform
-      f("#context_module_#{db_module.id} .admin-links .al-trigger").click
+      f("#context_module_#{db_module.id} .admin-links.al-trigger").click
       f("#context_module_#{db_module.id} .edit_module_link").click
       f('.ui-dialog').should be_displayed
       wait_for_ajaximations
@@ -890,7 +908,7 @@ describe "context_modules" do
       # add completion criterion
       context_module = f('.context_module')
       driver.action.move_to(context_module).perform
-      f('.admin-links .al-trigger').click
+      f('.admin-links.al-trigger').click
       f('.edit_module_link').click
       edit_form = f('#add_context_module_form')
       f('.add_completion_criterion_link', edit_form).click
@@ -953,7 +971,7 @@ describe "context_modules" do
       @student_enrollment = @course.enroll_user(@student, 'StudentEnrollment', :enrollment_state => 'active')
 
       @assignment = @course.assignments.create!(:title => 'assignment 1', :name => 'assignment 1')
-      @due_at = 3.days.from_now
+      @due_at = 1.year.from_now
       override_for_student(@student, @due_at)
 
       course_module
@@ -983,7 +1001,7 @@ describe "context_modules" do
 
       wait_for_ajaximations
       f(".due_date_display").text.should_not be_blank
-      f(".due_date_display").text.should == @due_at.strftime('%b %-d')
+      f(".due_date_display").text.should == @due_at.strftime('%b %-d, %Y')
     end
 
     it "when not associated, and in multiple sections, it should show the latest due date" do
@@ -1004,7 +1022,7 @@ describe "context_modules" do
 
       wait_for_ajaximations
       f(".due_date_display").text.should_not be_blank
-      f(".due_date_display").text.should == @due_at.strftime('%b %-d')
+      f(".due_date_display").text.should == @due_at.strftime('%b %-d, %Y')
     end
 
     it "when associated with a student, it should show the student's overridden due date" do
@@ -1017,10 +1035,14 @@ describe "context_modules" do
     end
 
     it "should indicate multiple due dates for multiple observed students" do
-      student2 = user(:active_all => true, :active_state => 'active')
-      @course.enroll_user(student2, 'StudentEnrollment', :enrollment_state => 'active')
-      override_for_student(student2, @due_at + 1.day)
+      section2 = @course.course_sections.create!
+      override = assignment_override_model(:assignment => @assignment)
+      override.set = section2
+      override.override_due_at(@due_at + 1.day)
+      override.save!
 
+      student2 = user(:active_all => true, :active_state => 'active', :section => section2)
+      @course.enroll_user(student2, 'StudentEnrollment', :enrollment_state => 'active')
       @course.enroll_user(@observer, 'ObserverEnrollment', :enrollment_state => 'active', :associated_user_id => @student.id)
       @course.enroll_user(@observer, 'ObserverEnrollment', :enrollment_state => 'active', :allow_multiple_enrollments => true, :associated_user_id => student2.id)
 
@@ -1069,9 +1091,11 @@ describe "context_modules" do
 
       @module1 = @course.context_modules.create!(:name => "module1")
       @assignment = @course.assignments.create!(:name => "pls submit", :submission_types => ["online_text_entry"], :points_possible => 42)
+      @assignment.publish
       @assignment_tag = @module1.add_item(:id => @assignment.id, :type => 'assignment')
       @external_url_tag = @module1.add_item(:type => 'external_url', :url => 'http://example.com/lolcats',
                                             :title => 'pls view', :indent => 1)
+      @external_url_tag.publish
       @module1.completion_requirements = {
           @assignment_tag.id => { :type => 'must_submit' },
           @external_url_tag.id => { :type => 'must_view' } }

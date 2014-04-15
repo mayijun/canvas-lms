@@ -20,9 +20,10 @@ require File.expand_path(File.dirname(__FILE__) + '/../spec_helper')
 
 describe DiscussionTopicsController do
   def course_topic(opts={})
-    @topic = @course.discussion_topics.build(:title => "some topic")
-    if @user && !opts[:skip_set_user]
-      @topic.user = @user
+    @topic = @course.discussion_topics.build(:title => "some topic", :pinned => opts[:pinned])
+    user = @user || opts[:user]
+    if user && !opts[:skip_set_user]
+      @topic.user = user
     end
 
     if opts[:with_assignment]
@@ -76,8 +77,8 @@ describe DiscussionTopicsController do
       integrate_views
 
       before do
-        course(:course_name => "I <3 Discussions")
-        course_topic(:with_assignment => true)
+        course(:course_name => "I <3 Discussions", :active_all => 1)
+        course_topic(:with_assignment => true, :user => @teacher)
         @section = @course.course_sections.create!(:name => "I <3 Discusions")
         @override = assignment_override_model(:assignment => @topic.assignment,
                                   :due_at => Time.now,
@@ -353,6 +354,12 @@ describe DiscussionTopicsController do
       @topic.lock_at.should be_nil
     end
 
+    it "should set workflow to post_delayed when delayed_post_at and lock_at are in the future" do
+      put(:update, course_id: @course.id, topic_id: @topic.id,
+          title: 'Updated topic', format: 'json', delayed_post_at: Time.zone.now + 5.days)
+      @topic.reload.should be_post_delayed
+    end
+
     it "should not clear lock_at if lock state hasn't changed" do
       put('update', course_id: @course.id, topic_id: @topic.id,
           title: 'Updated Topic', format: 'json', lock_at: @topic.lock_at,
@@ -368,18 +375,38 @@ describe DiscussionTopicsController do
           published: false)
 
       @topic.reload.should_not be_published
-      @topic.delayed_post_at.should be_nil
     end
 
     it "should delete attachments" do
       attachment = @topic.attachment = attachment_model(context: @course)
+      @topic.lock_at = Time.now + 1.week
+      @topic.unlock_at = Time.now - 1.week
       @topic.save!
+      @topic.unlock!
       put('update', course_id: @course.id, topic_id: @topic.id,
           format: 'json', remove_attachment: '1')
       response.should be_success
 
       @topic.reload.attachment.should be_nil
       attachment.reload.should be_deleted
+    end
+  end
+
+  describe "POST 'reorder'" do
+    it "should reorder pinned topics" do
+      course_with_teacher_logged_in(:active_all => true)
+
+      # add noise
+      @course.announcements.create!(message: 'asdf')
+      course_topic
+
+      topics = 3.times.map { course_topic(pinned: true) }
+      topics.map(&:position).should == [1, 2, 3]
+      t1, t2, _ = topics
+      post 'reorder', :course_id => @course.id, :order => "#{t2.id},#{t1.id}", :format => 'json'
+      response.should be_success
+      topics.each &:reload
+      topics.map(&:position).should == [2, 1, 3]
     end
   end
 end

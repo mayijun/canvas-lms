@@ -2,8 +2,8 @@ require File.expand_path(File.dirname(__FILE__) + '/helpers/wiki_and_tiny_common
 require File.expand_path(File.dirname(__FILE__) + '/helpers/quizzes_common')
 
 describe "Wiki pages and Tiny WYSIWYG editor Images" do
-  it_should_behave_like "in-process server selenium tests"
-  it_should_behave_like "quizzes selenium tests"
+  include_examples "in-process server selenium tests"
+  include_examples "quizzes selenium tests"
 
   context "wiki and tiny images as a teacher" do
 
@@ -39,13 +39,38 @@ describe "Wiki pages and Tiny WYSIWYG editor Images" do
       keep_trying_until { @image_list.find_elements(:css, '.img').length }.should == 2
     end
 
+    it "adds a tabindex to flickr search results" do
+      wiki_page_tools_file_tree_setup
+      f('#editor_tabs .ui-tabs-nav li:nth-child(3) a').click
+      f('.find_new_image_link').click
+      f('#image_search_form input[type=text]').send_keys('dog')
+      f('#image_search_form button[type=submit]').click
+      wait_for_animations
+      results = f('.results .image_link[tabindex="0"]')
+      results.should_not be_nil
+    end
+
+    it "inserts a flickr image when you hit enter" do
+      wiki_page_tools_file_tree_setup
+      f('#editor_tabs .ui-tabs-nav li:nth-child(3) a').click
+      f('.find_new_image_link').click
+      f('#image_search_form input[type=text]').send_keys('dog')
+      f('#image_search_form button[type=submit]').click
+      wait_for_animations
+      results = fj('.results .image_link[tabindex="0"]:first')
+      results.send_keys(:return)
+      in_frame "wiki_page_body_ifr" do
+        f('#tinymce img').should be_displayed
+      end
+    end
+
     it "should infini-scroll images" do
       wiki_page_tools_file_tree_setup
       90.times do |i|
         image = @root_folder.attachments.build(:context => @course)
         path = File.expand_path(File.dirname(__FILE__) + '/../../public/images/graded.png')
         image.display_name = "image #{i}"
-        image.uploaded_data = ActionController::TestUploadedFile.new(path, Attachment.mimetype(path))
+        image.uploaded_data = Rack::Test::UploadedFile.new(path, Attachment.mimetype(path))
         image.save!
       end
       @image_list.should_not have_class('initialized')
@@ -79,7 +104,7 @@ describe "Wiki pages and Tiny WYSIWYG editor Images" do
 
       wait_for_tiny(keep_trying_until { f("#new_wiki_page") })
       f('.upload_new_file_link').click
-      f('.wiki_switch_views_link').click
+      fj('.wiki_switch_views_link:visible').click
       wiki_page_body = clear_wiki_rce
 
       @image_list.find_elements(:css, '.img').length.should == 2
@@ -92,11 +117,12 @@ describe "Wiki pages and Tiny WYSIWYG editor Images" do
     end
 
     it "should show uploaded images in image list and add the image to the rce" do
+      pending "check image broken"
       wiki_page_tools_file_tree_setup
       wait_for_tiny(keep_trying_until { f("#new_wiki_page") })
-      f('.wiki_switch_views_link').click
+      fj('.wiki_switch_views_link:visible').click
       clear_wiki_rce
-      f('.wiki_switch_views_link').click
+      fj('.wiki_switch_views_link:visible').click
       f('#editor_tabs .ui-tabs-nav li:nth-child(3) a').click
       wait_for_ajax_requests
 
@@ -118,6 +144,7 @@ describe "Wiki pages and Tiny WYSIWYG editor Images" do
     end
 
     it "should be able to upload an image and add the image to the rce" do
+      pending "check_image broken"
       get "/courses/#{@course.id}/wiki"
 
       add_image_to_rce
@@ -176,7 +203,9 @@ describe "Wiki pages and Tiny WYSIWYG editor Images" do
       add_canvas_image(f("#question_content_0_parent"), 'Course files', 'course.jpg')
 
       in_frame "question_content_0_ifr" do
-        f("#tinymce").find_elements(:css, "img").length.should == 1
+        keep_trying_until {
+          f("#tinymce").find_elements(:css, "img").length.should == 1
+        }
         check_element_attrs(f('#tinymce img'), :src => /\/files\/#{@course_attachment.id}/, :alt => 'course.jpg')
       end
 

@@ -11,10 +11,6 @@
 # Run "rake -D time" for a list of tasks for finding time zone names. Comment line to use default local time.
 config.time_zone = 'UTC'
 
-if ENV['RUNNING_AS_DAEMON'] == 'true'
-  config.log_path = Rails.root+'log/delayed_job.log'
-end
-
 log_config = File.exists?(Rails.root+"config/logging.yml") && YAML.load_file(Rails.root+"config/logging.yml")[CANVAS_RAILS2 ? RAILS_ENV : Rails.env]
 log_config = { 'logger' => 'rails', 'log_level' => 'debug' }.merge(log_config || {})
 opts = {}
@@ -37,7 +33,12 @@ when "syslog"
 else
   log_path = CANVAS_RAILS2 ?
     config.log_path :
-    config.paths.log.first
+    config.paths['log'].first
+
+  if ENV['RUNNING_AS_DAEMON'] == 'true'
+    log_path = Rails.root+'log/delayed_job.log'
+  end
+
   config.logger = CanvasLogger.new(log_path, log_level, opts)
 end
 
@@ -57,23 +58,28 @@ config.active_record.observers = [:cacher, :stream_item_cache]
 
 config.autoload_paths += %W(#{Rails.root}/app/middleware
                             #{Rails.root}/app/observers
+                            #{Rails.root}/app/presenters
+                            #{Rails.root}/app/services
+                            #{Rails.root}/app/serializers
                             #{Rails.root}/app/presenters)
 
 if CANVAS_RAILS2
-  # XXX: Rails3 needs SessionsTimeout
-  config.middleware.insert_after(ActionController::Base.session_store, 'SessionsTimeout')
-  config.middleware.insert_before('ActionController::ParamsParser', "RequestContextGenerator")
-  config.middleware.insert_before('ActionController::ParamsParser', 'LoadAccount')
-  config.middleware.insert_before('ActionController::ParamsParser', 'StatsTiming')
-  config.middleware.insert_before('ActionController::ParamsParser', 'Canvas::RequestThrottle')
-  config.middleware.insert_before('ActionController::ParamsParser', 'PreventNonMultipartParse')
+  config.middleware.insert_before(ActionController::Base.session_store, 'LoadAccount')
+  config.middleware.insert_before(ActionController::Base.session_store, 'SessionsTimeout')
 else
-  config.middleware.insert_before('ActionDispatch::ParamsParser', "RequestContextGenerator")
-  config.middleware.insert_before('ActionDispatch::ParamsParser', 'LoadAccount')
-  config.middleware.insert_before('ActionDispatch::ParamsParser', 'StatsTiming')
-  config.middleware.insert_before('ActionDispatch::ParamsParser', 'Canvas::RequestThrottle')
-  config.middleware.insert_before('ActionDispatch::ParamsParser', 'PreventNonMultipartParse')
+  # we don't know what middleware to make SessionsTimeout follow until after
+  # we've loaded config/initializers/session_store.rb
+  initializer("extend_middleware_stack", after: "load_config_initializers") do |app|
+    app.config.middleware.insert_before(config.session_store, 'LoadAccount')
+    app.config.middleware.insert_before(config.session_store, 'SessionsTimeout')
+  end
 end
+
+params_parser = CANVAS_RAILS2 ? 'ActionController::ParamsParser' : 'ActionDispatch::ParamsParser'
+config.middleware.insert_before(params_parser, "RequestContextGenerator")
+config.middleware.insert_before(params_parser, 'StatsTiming')
+config.middleware.insert_before(params_parser, 'Canvas::RequestThrottle')
+config.middleware.insert_before(params_parser, 'PreventNonMultipartParse')
 
 config.to_prepare do
   require_dependency 'canvas/plugins/default_plugins'
@@ -120,6 +126,9 @@ end
 # is switched to Syck (which DelayedJob needs for now). Otherwise we
 # won't have access to (safe|unsafe)_load.
 require 'yaml'
+if RUBY_VERSION >= '2.0.0'
+  require 'syck'
+end
 YAML::ENGINE.yamler = 'syck' if defined?(YAML::ENGINE)
 require 'safe_yaml'
 YAML.enable_symbol_parsing!
@@ -131,6 +140,7 @@ SafeYAML::OPTIONS[:suppress_warnings] = true
 YAML.whitelist.add(*%w[
   tag:ruby.yaml.org,2002:symbol
   tag:yaml.org,2002:map:HashWithIndifferentAccess
+  tag:yaml.org,2002:map:ActiveSupport::HashWithIndifferentAccess
   tag:ruby.yaml.org,2002:object:OpenStruct
   tag:ruby.yaml.org,2002:object:Scribd::Document
   tag:ruby.yaml.org,2002:object:Mime::Type
@@ -166,3 +176,8 @@ else
     Canvas::Reloader.trap_signal
   end
 end
+
+# don't wrap fields with errors with a <div class="fieldWithErrors" />,
+# since that could leak information (e.g. valid vs invalid username on
+# login page)
+config.action_view.field_error_proc = Proc.new { |html_tag, instance| html_tag }

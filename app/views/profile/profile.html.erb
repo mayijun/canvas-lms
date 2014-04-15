@@ -21,14 +21,15 @@
 
 <% js_env :folder_id => @user.profile_pics_folder.id,
           :PASSWORD_POLICY => @domain_root_account.password_policy,
-          :PASSWORD_POLICIES => Hash[@password_pseudonyms.map{ |p| [p.id, p.account.password_policy]}]
+          :PASSWORD_POLICIES => Hash[@password_pseudonyms.map{ |p| [p.id, p.account.password_policy]}],
+          :PROFILE => @user_data
 %>
 <% js_bundle :profile %>
 <% jammit_css :profile_edit %>
 
 <% if service_enabled?(:avatars) %>
   <a href="#" class="profile_pic_link <%= @user.avatar_state %>" title="<%= t('titles.click_to_change_profile_pic', "Click to change profile pic") %>" style="float: left; margin-right: 5px; min-width: 50px; min-height: 50px; display: inline-block;">
-    <%= avatar_image(@user) %>
+    <%= square_avatar_image(@user) %>
 
     <i class="icon-edit"></i>
   </a>
@@ -90,6 +91,15 @@
     <td>
       <span class="time_zone display_data"><%= @user.time_zone.try(:name) || t(:none, "None") %></span>
       <span class="edit_data"><%= f.time_zone_select :time_zone, ActiveSupport::TimeZone.us_zones, :model => I18nTimeZone, :default => ((@domain_root_account && @domain_root_account.default_time_zone.name) || "Mountain Time (US & Canada)") %><%# that default time zone is a value, not text %></span>
+    </td>
+  </tr>
+  <tr>
+    <td><%= f.blabel :enabled_theme, :en => "Enabled Theme" %></td>
+    <td>
+      <span class="display_data"><%= @user.enabled_theme.titleize %></span>
+      <span class="edit_data">
+        <%= f.select :enabled_theme, [["Default", "default"], ["High Contrast (Beta)", "high_contrast"]], :selected => @user.enabled_theme %>
+      </span>
     </td>
   </tr>
   <% if @domain_root_account == Account.default %>
@@ -249,7 +259,7 @@ TEXT
           </div>
         </div>
       </li>
-      <li id="unregistered_service_skype" class="service" style="<%= hidden if services.include?("skype") %>">
+      <li id="unregistered_service_skype" class="service" style="<%= hidden if services.include?("skype") || !service_enabled?(:skype) %>">
         <a href="#" class="btn btn-small"><%= image_tag "skype_icon.png" %> <%= t('links.skype', "Skype") %></a>
         <div style="display: none; text-align: left;" class="content" title="<%= t('titles.register_skype', "Register Skype") %>" id="unregistered_service_skype_dialog">
           <div>
@@ -346,7 +356,7 @@ TEXT
           </div>
         </div>
       </li>
-      <li id="unregistered_service_delicious" class="service" style="<%= hidden if services.include?("delicious") %>">
+      <li id="unregistered_service_delicious" class="service" style="<%= hidden if services.include?("delicious") || !service_enabled?(:delicious) %>">
         <a href="#" class="btn btn-small"><%= image_tag "delicious_icon.png" %> <%= t('links.delicious', "Delicious") %></a>
         <div style="display: none; text-align: left;" class="content" title="<%= t('titles.delicious_login', "Delicious Login") %>" id="unregistered_service_delicious_dialog">
           <div>
@@ -380,7 +390,7 @@ TEXT
           </div>
         </div>
       </li>
-      <li id="unregistered_service_diigo" class="service" style="<%= hidden if services.include?("diigo") %>">
+      <li id="unregistered_service_diigo" class="service" style="<%= hidden if services.include?("diigo") || !service_enabled?(:diigo) %>">
         <a href="#" class="btn btn-small"><%= image_tag "diigo_icon.png" %> <%= t('links.diigo', "Diigo") %></a>
         <div style="display: none; text-align: left;" class="content" title="<%= t('titles.diigo_login', "Diigo Login") %>" id="unregistered_service_diigo_dialog">
           <div>
@@ -541,6 +551,12 @@ TEXT
     <% end %>
   </div>
 </div>
+
+<h3><%= t(:feature_options, 'Feature Options') %></h3>
+<div class="feature-flag-wrapper">
+  <!-- this is populated by FeatureFlagAdminView -->
+</div>
+
 <div id="profile_pic_dialog" style="display: none;">
   <a href="<%= profile_pics_url %>" class="profile_pics_url" style="display: none;">&nbsp;</a>
   <%= t(:profile_pictures, "Select the image you'd like to use as your profile pic, or upload a new image:") %>

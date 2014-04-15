@@ -41,7 +41,7 @@ describe "Common Cartridge exporting" do
       @ce.export_course_without_send_later
       @ce.error_messages.should == []
       @file_handle = @ce.attachment.open :need_local_file => true
-      @zip_file = Zip::ZipFile.open(@file_handle.path)
+      @zip_file = Zip::File.open(@file_handle.path)
       @manifest_body = @zip_file.read("imsmanifest.xml")
       @manifest_doc = Nokogiri::XML.parse(@manifest_body)
     end
@@ -403,6 +403,26 @@ describe "Common Cartridge exporting" do
       @course.name = "a" * Course.maximum_string_length
 
       run_export
+    end
+
+    it "should export media tracks" do
+      stub_kaltura
+      Kaltura::ClientV3.any_instance.stubs(:startSession)
+      Kaltura::ClientV3.any_instance.stubs(:flavorAssetGetPlaylistUrl).returns(Tempfile.new('blah.flv'))
+      CC::CCHelper.stubs(:media_object_info).returns({asset: {id: 1, status: '2'}, filename: 'blah.flv'})
+      obj = @course.media_objects.create! media_id: '0_deadbeef'
+      track = obj.media_tracks.create! kind: 'subtitles', locale: 'tlh', content: "Hab SoSlI' Quch!"
+      page = @course.wiki.front_page
+      page.body = %Q{<a id="media_comment_0_deadbeef" class="instructure_inline_media_comment video_comment"></a>}
+      page.save!
+      @ce.export_type = ContentExport::COMMON_CARTRIDGE
+      @ce.save!
+      run_export
+      file_node = @manifest_doc.at_css("resource[identifier='id4164d7d594985594573e63f8ca15975'] file[href$='/blah.flv.tlh.subtitles']")
+      file_node.should be_present
+      @zip_file.read(file_node['href']).should eql(track.content)
+      track_doc = Nokogiri::XML(@zip_file.read('course_settings/media_tracks.xml'))
+      track_doc.at_css('media_tracks media track[locale=tlh][kind=subtitles][identifierref=id4164d7d594985594573e63f8ca15975]').should be_present
     end
   end
 end

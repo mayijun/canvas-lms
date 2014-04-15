@@ -2,12 +2,12 @@ require File.expand_path(File.dirname(__FILE__) + '/common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/calendar2_common')
 
 describe "calendar2" do
-  it_should_behave_like "in-process server selenium tests"
+  include_examples "in-process server selenium tests"
 
   before (:each) do
     Account.default.tap do |a|
       a.settings[:enable_scheduler] = true
-      a.settings[:show_scheduler] = true
+      a.settings[:show_scheduler]   = true
       a.save!
     end
   end
@@ -27,7 +27,7 @@ describe "calendar2" do
   end
 
   def find_middle_day
-    f('.calendar .fc-week1 .fc-wed')
+    f('.calendar .fc-week:nth-child(1) .fc-wed')
   end
 
   def change_calendar(direction = :next)
@@ -154,6 +154,16 @@ describe "calendar2" do
           element_exists('.fc_event').should be_false
         end
 
+        it "should constrain context selection to 10" do
+          30.times do |x|
+            course_with_teacher(:course_name => "Course #{x + 1}", :user => @user, :active_all => true).course
+          end
+
+          get "/calendar2"
+          ff('.context_list_context').each(&:click)
+          ff('.context_list_context.checked').count.should == 10
+        end
+
         it "should validate calendar feed display" do
           get "/calendar2"
 
@@ -167,7 +177,7 @@ describe "calendar2" do
           e = make_event :start => nil, :title => "pizza party"
           get "/calendar2"
 
-          f(".undated-events-link").click
+          f("#undated-events-section .element_toggler").click
           wait_for_ajaximations
           undated_events = ff("#undated-events > ul > li")
           undated_events.size.should == 1
@@ -178,7 +188,7 @@ describe "calendar2" do
           e = make_event :start => nil, :title => "asdfjkasldfjklasdjfklasdjfklasjfkljasdklfjasklfjkalsdjsadkfljasdfkljfsdalkjsfdlksadjklsadjsadklasdf"
           get "/calendar2"
 
-          f(".undated-events-link").click
+          f("#undated-events-section .element_toggler").click
           wait_for_ajaximations
           undated_events = ff("#undated-events > ul > li")
           undated_events.size.should == 1
@@ -204,28 +214,40 @@ describe "calendar2" do
         create_assignment_event(name)
       end
 
+      it "should remember the selected calendar view" do
+        get "/calendar2"
+        f("#month").should have_class('active')
+        f('#agenda').click
+        wait_for_ajaximations
+
+        get "/calendar2"
+        f('#agenda').should have_class('active')
+      end
+
       it "should create an event through clicking on a calendar day" do
         create_middle_day_event
       end
 
       it "should show scheduler button if it is enabled" do
         get "/calendar2"
-        f("#scheduler").should have_class("ui-helper-hidden-accessible")
+        f("#scheduler").should_not be_nil
       end
 
       it "should not show scheduler button if it is disabled" do
         account = Account.default.tap { |a| a.settings[:show_scheduler] = false; a.save! }
         get "/calendar2"
         wait_for_ajaximations
-        ff(".calendar_view_buttons .ui-button").length.should == 2
+        ff('.calendar_view_buttons .ui-button').each do |button|
+          button.text.should_not match(/scheduler/i)
+        end
       end
 
       it "should drag and drop an event" do
         pending('drag and drop not working correctly')
         create_middle_day_event
-        driver.action.drag_and_drop(f('.calendar .fc-event'), f('.calendar .fc-week2 .fc-last')).perform
+        driver.action.drag_and_drop(f('.calendar .fc-event'), f('.calendar .fc-week:nth-child(2) .fc-last')).perform
         wait_for_ajaximations
-        CalendarEvent.last.start_at.strftime('%d').should == f('.calendar .fc-week2 .fc-last .fc-day-number').text
+        CalendarEvent.last.start_at.strftime('%d').should == f('.calendar .fc-week:nth-child(2) .fc-last .fc-day-number').text
       end
 
       it "should create an assignment by clicking on a calendar day" do
@@ -295,6 +317,23 @@ describe "calendar2" do
         get("/calendar2")
         wait_for_ajax_requests
         fj('.fc-event-inner').should be_nil
+      end
+
+      it "should not have a delete link for a frozen assignment" do
+        PluginSetting.stubs(:settings_for_plugin).returns({"assignment_group_id" => "true"})
+        frozen_assignment = @course.assignments.build(
+          name: "frozen assignment",
+          due_at: Time.zone.now,
+          freeze_on_copy: true,
+        )
+        frozen_assignment.copied = true
+        frozen_assignment.save!
+
+        get("/calendar2")
+        wait_for_ajaximations
+        fj('.fc-event:visible').click
+        wait_for_ajaximations
+        f('.delete_event_link').should be_nil
       end
 
       it "should let me message students who have signed up for an appointment" do
@@ -400,7 +439,7 @@ describe "calendar2" do
         replace_content(f('.ui-dialog #assignment_due_at'), "")
         submit_form('#edit_assignment_form')
         wait_for_ajax_requests
-        f(".undated-events-link").click
+        f("#undated-events-section .element_toggler").click
         f('.fc-event').should be_nil
         f('.undated_event_title').text.should == "undate me"
       end
@@ -414,7 +453,7 @@ describe "calendar2" do
 
       it "should change the week" do
         get "/calendar2"
-        header_buttons = ff('.ui-buttonset > label')
+        header_buttons = ff('.btn-group .btn')
         header_buttons[0].click
         wait_for_ajaximations
         old_header_title = get_header_text
@@ -435,14 +474,15 @@ describe "calendar2" do
 
       it "should navigate with jump-to-date control" do
         Account.default.change_root_account_setting!(:agenda_view, true)
-        make_event(start: 1.month.from_now)
+        # needs to be 2 months out so it doesn't appear at the start of the next month
+        eventStart = 2.months.from_now
+        make_event(start: eventStart)
 
         get "/calendar2"
         wait_for_ajaximations
         f('.fc-event').should be_nil
-        next_month_num = Time.now.month + 1 % 12
-        next_month = Date::MONTHNAMES[next_month_num]
-        quick_jump_to_date(next_month)
+        eventStartText = eventStart.strftime("%Y %m %d")
+        quick_jump_to_date(eventStartText)
         f('.fc-event').should_not be_nil
       end
 
@@ -511,7 +551,7 @@ describe "calendar2" do
 
         it "should display popup with correct day on an event" do
           local_now = @user.time_zone.now
-          event_start = @user.time_zone.local(local_now.year, local_now.month, 15, 23, 0, 0)
+          event_start = @user.time_zone.local(local_now.year, local_now.month, 15, 22, 0, 0)
           make_event(:start => event_start)
           get "/calendar2"
           wait_for_ajaximations
@@ -521,7 +561,7 @@ describe "calendar2" do
 
         it "should display popup with correct day on an assignment" do
           local_now = @user.time_zone.now
-          event_start = @user.time_zone.local(local_now.year, local_now.month, 15, 23, 0, 0)
+          event_start = @user.time_zone.local(local_now.year, local_now.month, 15, 22, 0, 0)
           @course.assignments.create!(
             title: 'test assignment',
             due_at: event_start,
@@ -538,10 +578,10 @@ describe "calendar2" do
           @student.save!
 
           local_now = @user.time_zone.now
-          assignment_start = @user.time_zone.local(local_now.year, local_now.month, 15, 23, 0, 0)
+          assignment_start = @user.time_zone.local(local_now.year, local_now.month, 15, 22, 0, 0)
           assignment = @course.assignments.create!(title: 'test assignment', due_at: assignment_start)
 
-          override_start = @user.time_zone.local(local_now.year, local_now.month, 20, 23, 0, 0)
+          override_start = @user.time_zone.local(local_now.year, local_now.month, 20, 22, 0, 0)
           override = assignment.assignment_overrides.create! do |o|
             o.title = 'test override'
             o.set_type = 'ADHOC'
@@ -579,30 +619,12 @@ describe "calendar2" do
         get "/calendar2"
         wait_for_ajaximations
 
-        f('label[for=week]').click
+        f('#week').click
         keep_trying_until do
           events = ff('.fc-event').select { |e| e.text =~ /due.*super important/ }
           # shows on monday night and tuesday morning
           events.size.should == 2
         end
-      end
-
-
-      it "should change event duration by dragging" do
-        noon = Time.now.utc.at_beginning_of_day + 12.hours
-        #expecting time in UTC
-        event = @course.calendar_events.create! :title => "ohai", :start_at => noon, :end_at => noon + 1.hour
-        get "/calendar2"
-        wait_for_ajaximations
-        f('label[for=week]').click
-        wait_for_ajaximations
-        resize_handle = fj('.fc-event:visible .ui-resizable-handle')
-        driver.action.drag_and_drop_by(resize_handle, 0, 50).perform
-        wait_for_ajaximations
-        # dragging it 50px will make it one hour longer, a 2 hour event is 80px tall
-        fj('.fc-event:visible').size.height.should == 80
-        event.reload
-        event.end_at.should == noon + 2.hours
       end
 
       it "should show short events at full height" do
@@ -611,7 +633,7 @@ describe "calendar2" do
 
         get "/calendar2"
         wait_for_ajax_requests
-        f('label[for=week]').click
+        f('#week').click
 
         elt = fj('.fc-event:visible')
         elt.size.height.should >= 18
@@ -625,7 +647,7 @@ describe "calendar2" do
 
         get "/calendar2"
         wait_for_ajaximations
-        f('label[for=week]').click
+        f('#week').click
         wait_for_ajaximations
 
         elts = ffj('.fc-event:visible')
@@ -641,7 +663,7 @@ describe "calendar2" do
         event = @course.calendar_events.create! :title => "ohai", :start_at => noon, :end_at => noon + 5.minutes
         get "/calendar2"
         wait_for_ajaximations
-        f('label[for=week]').click
+        f('#week').click
         wait_for_ajaximations
 
         elt = fj('.fc-event:visible')
@@ -652,11 +674,12 @@ describe "calendar2" do
       end
 
       it "should change duration of a short event when dragging resize handle" do
+        pending("dragging events doesn't seem to work")
         noon = Time.zone.now.at_beginning_of_day + 12.hours
         event = @course.calendar_events.create! :title => "ohai", :start_at => noon, :end_at => noon + 5.minutes
         get "/calendar2"
         wait_for_ajaximations
-        f('label[for=week]').click
+        f('#week').click
         wait_for_ajaximations
 
         resize_handle = fj('.fc-event:visible .ui-resizable-handle')
@@ -672,7 +695,7 @@ describe "calendar2" do
         event = @course.calendar_events.create! :title => "ohai", :start_at => noon, :end_at => noon + 5.minutes
         get "/calendar2"
         wait_for_ajaximations
-        f('label[for=week]').click
+        f('#week').click
         wait_for_ajaximations
 
         elt = fj('.fc-event:visible')
@@ -694,7 +717,7 @@ describe "calendar2" do
       it "should display agenda events" do
         get '/calendar2'
         wait_for_ajaximations
-        f('label[for=agenda]').click
+        f('#agenda').click
         wait_for_ajaximations
         fj('.agenda-wrapper:visible').should be_present
       end
@@ -705,18 +728,18 @@ describe "calendar2" do
           start_at: start_date, end_at: start_date + 1.hour)
         get '/calendar2'
         wait_for_ajaximations
-        f('label[for=agenda]').click
+        f('#agenda').click
         wait_for_ajaximations
-        f('.navigation_title').text.should match(/[A-Z][a-z]{2}\s\d{2},\s\d{4}/)
+        f('.navigation_title').text.should match(/[A-Z][a-z]{2}\s\d{1,2},\s\d{4}/)
       end
 
       it "should respect context filters" do
-        start_date = Time.now.beginning_of_day + 12.hours
+        start_date = Time.now.utc.beginning_of_day + 12.hours
         event = @course.calendar_events.create!(title: "ohai",
           start_at: start_date, end_at: start_date + 1.hour)
         get '/calendar2'
         wait_for_ajaximations
-        f('label[for=agenda]').click
+        f('#agenda').click
         wait_for_ajaximations
         ffj('.ig-row').length.should == 1
         fj('.context-list-toggle-box:last').click
@@ -729,7 +752,7 @@ describe "calendar2" do
         event = make_event(start: yesterday)
         get "/calendar2"
         wait_for_ajaximations
-        f('label[for=agenda]').click
+        f('#agenda').click
         wait_for_ajaximations
         ffj('.ig-row').length.should == 0
         quick_jump_to_date(yesterday.strftime("%b %-d %Y"))
@@ -742,13 +765,89 @@ describe "calendar2" do
         event = make_event(start: yesterday)
         get "/calendar2"
         wait_for_ajaximations
-        f('label[for=agenda]').click
+        f('#agenda').click
         wait_for_ajaximations
         ffj('.ig-row').length.should == 0
         f('.fc-button-prev').click
         f('.fc-day-number').click
         wait_for_ajaximations
-        ffj('.ig-row').length.should == 1
+        keep_trying_until { ffj('.ig-row').length.should == 1 }
+      end
+
+      it "should persist the start date across reloads" do
+        get "/calendar2"
+        wait_for_ajaximations
+        f('#agenda').click
+        next_year = 1.year.from_now.strftime("%Y")
+        quick_jump_to_date(next_year)
+        refresh_page
+        wait_for_ajaximations
+        f('.navigation_title').should include_text(next_year)
+      end
+
+      it "should transfer the start date when switching views" do
+        get "/calendar2"
+        wait_for_ajaximations
+        f('.navigate_next').click()
+        f('#agenda').click
+        f('.navigation_title').should include_text(1.month.from_now.strftime("%b"))
+        next_year = 1.year.from_now.strftime("%Y")
+        quick_jump_to_date(next_year)
+        f('#month').click
+        f('.navigation_title').should include_text(next_year)
+      end
+
+      it "should display the displayed date range in the header" do
+        tomorrow = 1.day.from_now
+        event = make_event(start: tomorrow)
+        get "/calendar2"
+        wait_for_ajaximations
+        f('#agenda').click
+        wait_for_ajaximations
+        f('.navigation_title').should include_text(Time.now.utc.strftime("%b %-d, %Y"))
+        f('.navigation_title').should include_text(tomorrow.utc.strftime("%b %-d, %Y"))
+      end
+
+      it "should not display a date range if no events are found" do
+        get "/calendar2"
+        wait_for_ajaximations
+        f('#agenda').click
+        wait_for_ajaximations
+        f('.navigation_title').should_not include_text('Invalid')
+      end
+
+      it "should allow editing events" do
+        tomorrow = 1.day.from_now
+        event = make_event(start: tomorrow)
+        get "/calendar2"
+        wait_for_ajaximations
+        f('#agenda').click
+        wait_for_ajaximations
+        f('.ig-row').click()
+        f('.event-details .delete_event_link').click()
+        fj('.ui-dialog:visible .btn-primary').click()
+        wait_for_ajaximations
+        ffj('.ig-row').length.should == 0
+      end
+
+      it "should display midnight assignments at 11:59" do
+        assignment_model(:course => @course,
+                         :title => "super important",
+                         :due_at => Time.zone.now.beginning_of_day + 1.day - 1.minute)
+        calendar_events = @teacher.calendar_events_for_calendar.last
+
+        calendar_events.title.should == "super important"
+        @assignment.due_date.should == (Time.zone.now.beginning_of_day + 1.day - 1.minute).to_date
+
+        get "/calendar2"
+        wait_for_ajaximations
+
+        f('#agenda').click
+        wait_for_ajaximations
+
+        f('.ig-details').should include_text('11:59')
+        f('.ig-row').click()
+        fj('.event-details:visible time').should include_text('11:59')
       end
     end
   end
@@ -786,7 +885,7 @@ describe "calendar2" do
         expect_new_page_load { driver.execute_script("$('#popover-0 .view_event_link').hover().click()") }
 
 
-        is_checked('#scheduler').should be_true
+        f('#scheduler').should have_class('active')
         f('#appointment-group-list').should include_text(ag.title)
       end
 
@@ -858,13 +957,13 @@ describe "calendar2" do
         get "/courses/#{@course.id}/calendar_events/#{event.id}?calendar=1"
         wait_for_ajaximations
         fj('.calendar_header .navigation_title').text.should == 'Julio 2012'
-        fj('#calendar-app .fc-sun').text.should == 'Domingo'
-        fj('#calendar-app .fc-mon').text.should == 'Lunes'
-        fj('#calendar-app .fc-tue').text.should == 'Martes'
-        fj('#calendar-app .fc-wed').text.should == 'Miercoles'
-        fj('#calendar-app .fc-thu').text.should == 'Jueves'
-        fj('#calendar-app .fc-fri').text.should == 'Viernes'
-        fj('#calendar-app .fc-sat').text.should == 'Sabado'
+        fj('#calendar-app .fc-sun').text.should == 'DOM'
+        fj('#calendar-app .fc-mon').text.should == 'LUN'
+        fj('#calendar-app .fc-tue').text.should == 'MAR'
+        fj('#calendar-app .fc-wed').text.should == 'MIE'
+        fj('#calendar-app .fc-thu').text.should == 'JUE'
+        fj('#calendar-app .fc-fri').text.should == 'VIE'
+        fj('#calendar-app .fc-sat').text.should == 'SAB'
       end
     end
 
@@ -877,13 +976,6 @@ describe "calendar2" do
         # Get the spanish text for the current month/year
         expect_month_year = I18n.l(Date.today, :format => '%B %Y', :locale => 'es')
         fj('#minical h2').text.should == expect_month_year
-        fj('#minical .fc-sun').text.should == 'Dom'
-        fj('#minical .fc-mon').text.should == 'Lun'
-        fj('#minical .fc-tue').text.should == 'Mar'
-        fj('#minical .fc-wed').text.should == 'Mie'
-        fj('#minical .fc-thu').text.should == 'Jue'
-        fj('#minical .fc-fri').text.should == 'Vie'
-        fj('#minical .fc-sat').text.should == 'Sab'
       end
     end
   end

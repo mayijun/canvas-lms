@@ -97,7 +97,8 @@ define [
 
     submissionType: =>
       submissionTypes = @_submissionTypes()
-      if _.include(submissionTypes, 'none') || submissionTypes.length == 0 then 'none'
+      if this.isNew() then 'online'
+      else if _.include(submissionTypes, 'none') || submissionTypes.length == 0 then 'none'
       else if _.include submissionTypes, 'on_paper' then 'on_paper'
       else if _.include submissionTypes, 'external_tool' then 'external_tool'
       else 'online'
@@ -110,16 +111,9 @@ define [
       submissionTypes = @_submissionTypes()
       @expectsSubmission() && !@get('locked_for_user') && !_.include(submissionTypes, 'online_quiz') && !_.include(submissionTypes, 'attendance')
 
-    isGraded: =>
-      submission = @get('submission') || new Backbone.Model {}
-      !submission.get('notYetGraded')?
-
-    hasSubmission: =>
-      submission = @get('submission') || new Backbone.Model {}
-      !!submission.get('submission_type')
-
     withoutGradedSubmission: =>
-      !@get('submission')? || (!@hasSubmission() && !@isGraded())
+      sub = @get('submission')
+      !sub? || sub.withoutGradedSubmission()
 
     acceptsOnlineUpload: =>
       !! _.include @_submissionTypes(), 'online_upload'
@@ -134,6 +128,7 @@ define [
       !! _.include @_submissionTypes(), 'online_text_entry'
 
     isOnlineSubmission: =>
+      return true if this.isNew()
       _.any @_submissionTypes(), (thing) ->
           thing in ['online', 'online_text_entry',
             'media_recording', 'online_url', 'online_upload']
@@ -212,6 +207,9 @@ define [
     isLetterGraded: =>
       @gradingType() == 'letter_grade'
 
+    isGpaScaled: =>
+      @gradingType() == 'gpa_scale'
+
     published: (newPublished) =>
       return @get 'published' unless arguments.length > 0
       @set 'published', newPublished
@@ -249,6 +247,15 @@ define [
       models = (groups and groups.models) or []
       result = _.map models, (group) -> group.toJSON()
 
+    singleSectionDueDate: =>
+      if !@multipleDueDates() && !@dueAt()
+        allDates = @allDates()
+        for section in allDates
+          if section.dueAt
+            return section.dueAt.toISOString()
+      else
+        return @dueAt()
+
     toView: =>
       fields = [
         'name', 'dueAt','description','pointsPossible', 'lockAt', 'unlockAt',
@@ -261,9 +268,9 @@ define [
         'turnitinAvailable','turnitinEnabled',
         'gradeGroupStudentsIndividually', 'groupCategoryId', 'frozen',
         'frozenAttributes', 'freezeOnCopy', 'canFreeze', 'isSimple',
-        'gradingStandardId', 'isLetterGraded', 'assignmentGroupId', 'iconType',
+        'gradingStandardId', 'isLetterGraded', 'isGpaScaled', 'assignmentGroupId', 'iconType',
         'published', 'htmlUrl', 'htmlEditUrl', 'labelId', 'position',
-        'multipleDueDates', 'allDates', 'isQuiz'
+        'multipleDueDates', 'allDates', 'isQuiz', 'singleSectionDueDate'
       ]
       hash = id: @get 'id'
       for field in fields

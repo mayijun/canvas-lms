@@ -1,5 +1,6 @@
 define [
   'i18n!groups'
+  'jquery'
   'underscore'
   'Backbone'
   'compiled/views/CollectionView'
@@ -9,7 +10,7 @@ define [
   'jst/groups/manage/groupCategories'
   'jst/groups/manage/groupCategoryTab'
   'jqueryui/tabs'
-], (I18n, _, {View}, CollectionView, GroupCategoryView, GroupCategoryCreateView, GroupCategory, groupCategoriesTemplate, tabTemplate) ->
+], (I18n, $, _, {View}, CollectionView, GroupCategoryView, GroupCategoryCreateView, GroupCategory, groupCategoriesTemplate, tabTemplate) ->
 
   class GroupCategoriesView extends CollectionView
 
@@ -18,7 +19,7 @@ define [
     className: 'group_categories_area'
 
     els: _.extend {},
-      CollectionView::els,
+      CollectionView::els
       '#group_categories_tabs': '$tabs'
       '#add-group-set': '$addGroupSetButton'
       '.empty-groupset-instructions': '$emptyInstructions'
@@ -29,7 +30,7 @@ define [
 
     itemView: View.extend
       tagName: 'li'
-      template: tabTemplate
+      template: -> tabTemplate _.extend(@model.present(), id: @model.id ? @model.cid)
 
     refreshTabs: ->
       # setup the tabs
@@ -48,7 +49,7 @@ define [
 
     createItemView: (model) ->
       # create and add tab panel
-      panelId = "tab-#{model.id}"
+      panelId = "tab-#{model.id ? model.cid}"
       $panel = $('<div/>').addClass('tab-panel').attr('id', panelId).data('loaded', false).data('model', model)
       @$tabs.append($panel)
       # If this is the first panel, load the contents
@@ -76,7 +77,9 @@ define [
 
     addGroupSet: (e) ->
       e.preventDefault()
-      @createView ?= new GroupCategoryCreateView({@collection})
+      @createView ?= new GroupCategoryCreateView
+        collection: @collection
+        trigger: @$addGroupSetButton
       cat = new GroupCategory
       cat.once 'sync', =>
         @collection.add(cat)

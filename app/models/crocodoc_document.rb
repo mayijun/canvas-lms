@@ -41,8 +41,10 @@ class CrocodocDocument < ActiveRecord::Base
       crocodoc_api.upload(url)
     }
 
-    if response['uuid']
+    if response && response['uuid']
       update_attributes :uuid => response['uuid'], :process_state => 'QUEUED'
+    elsif response.nil?
+      raise "no response received (request timed out?)"
     else
       raise response.inspect
     end
@@ -133,20 +135,25 @@ class CrocodocDocument < ActiveRecord::Base
             statuses.concat CrocodocDocument.crocodoc_api.status(sub_docs.map(&:uuid))
           end
 
+          bulk_updates = {}
+          error_uuids = []
           statuses.each do |status|
             uuid, state = status['uuid'], status['status']
-            CrocodocDocument.
-                where(:uuid => status['uuid']).
-                update_all(:process_state => status['status'])
+            bulk_updates[status['status']] ||= []
+            bulk_updates[status['status']] << status['uuid']
             if status['status'] == 'ERROR'
               error = status['error'] || 'No explanation given'
+              error_uuids << status['uuid']
               ErrorReport.log_error 'crocodoc', :message => error
             end
           end
 
-          error_uuids = statuses.select { |s|
-            s['status'] == 'ERROR'
-          }.map { |s| s['uuid'] }
+          bulk_updates.each do |status, uuids|
+            CrocodocDocument.
+                where(:uuid => uuids).
+                update_all(:process_state => status)
+          end
+
           if error_uuids.present?
             error_docs = CrocodocDocument.where(:uuid => error_uuids)
             attachment_ids = error_docs.map(&:attachment_id)

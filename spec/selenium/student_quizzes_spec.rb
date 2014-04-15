@@ -1,19 +1,97 @@
 require File.expand_path(File.dirname(__FILE__) + '/helpers/quizzes_common')
 
 describe "quizzes" do
-  it_should_behave_like "quizzes selenium tests"
+  include_examples "quizzes selenium tests"
+
+  def prepare_quiz
+    @quiz = quiz_model({
+      :course => @course,
+      :time_limit => 5
+    })
+
+    @quiz.quiz_questions.create!(:question_data => multiple_choice_question_data)
+    @quiz.generate_quiz_data
+    @quiz.save
+    @quiz
+  end
 
   context "as a student" do
-    before (:each) do
+    before(:each) do
       course_with_student_logged_in
       @qsub = quiz_with_submission(false)
+    end
+
+    context "taking a timed quiz" do
+      it "should warn the student before the due date is exceeded" do
+        @context = @course
+        bank = @course.assessment_question_banks.create!(:title => 'Test Bank')
+        q = quiz_model
+        a = bank.assessment_questions.create!
+        b = bank.assessment_questions.create!
+        answers = [{id: 1, answer_text: 'A', weight: 100}, {id: 2, answer_text: 'B', weight: 0}]
+        question = q.quiz_questions.create!(:question_data => {
+          :name => "first question",
+          'question_type' => 'multiple_choice_question',
+          'answers' => answers,
+          :points_possible => 1
+        }, :assessment_question => a)
+
+        q.generate_quiz_data
+        q.due_at = Time.now.utc + 20.seconds
+        q.save!
+
+        get "/courses/#{@course.id}/quizzes/#{q.id}/take?user_id=#{@student.id}"
+        f("#take_quiz_link").click
+        answer_one = f("#question_#{question.id}_answer_1")
+        answer_two = f("#question_#{question.id}_answer_2")
+
+        # force a save to create a submission
+        answer_one.click
+        wait_for_ajaximations
+
+        keep_trying_until do
+          submission = Quizzes::QuizSubmission.last
+          fj('#times_up_dialog:visible').should be_present
+        end
+      end
+
+      it "should warn the student before the lock date is exceeded" do
+        @context = @course
+        bank = @course.assessment_question_banks.create!(:title => 'Test Bank')
+        q = quiz_model
+        a = bank.assessment_questions.create!
+        b = bank.assessment_questions.create!
+        answers = [{id: 1, answer_text: 'A', weight: 100}, {id: 2, answer_text: 'B', weight: 0}]
+        question = q.quiz_questions.create!(:question_data => {
+          :name => "first question",
+          'question_type' => 'multiple_choice_question',
+          'answers' => answers,
+          :points_possible => 1
+        }, :assessment_question => a)
+
+        q.generate_quiz_data
+        q.lock_at = Time.now.utc + 20.seconds
+        q.save!
+
+        get "/courses/#{@course.id}/quizzes/#{q.id}/take?user_id=#{@student.id}"
+        f("#take_quiz_link").click
+        answer_one = f("#question_#{question.id}_answer_1")
+        answer_two = f("#question_#{question.id}_answer_2")
+
+        # force a save to create a submission
+        answer_one.click
+        wait_for_ajaximations
+
+        keep_trying_until do
+          submission = Quizzes::QuizSubmission.last
+          fj('#times_up_dialog:visible').should be_present
+        end
+      end
     end
 
     context "resume functionality" do
       def update_quiz_lock(lock_at, unlock_at)
         @quiz.update_attributes(:lock_at => lock_at, :unlock_at => unlock_at)
-        @quiz.reload
-        @quiz.save!
       end
 
       # This feature doesn't exist for draft state yet
@@ -33,19 +111,19 @@ describe "quizzes" do
         end
 
         it "should show the resume quiz link if quiz unlock_at date is < now" do
-          update_quiz_lock(Time.now - 1.day.ago, Time.now - 10.minutes.ago)
+          update_quiz_lock(nil, 10.minutes.ago)
           get "/courses/#{@course.id}/quizzes"
           f('.description').should include_text('Resume Quiz')
         end
 
         it "should not show the resume link if the quiz is locked" do
-          update_quiz_lock(Time.now - 5.minutes, nil)
+          update_quiz_lock(5.minutes.ago, nil)
           get "/courses/#{@course.id}/quizzes"
           f('.description').should_not include_text('Resume Quiz')
         end
 
         it "should grade any submission that needs grading" do
-          @qsub.end_at = Time.now - 5.minutes
+          @qsub.end_at = 5.minutes.ago
           @qsub.save!
           get "/courses/#{@course.id}/quizzes"
           f('.description').should_not include_text('Resume Quiz')
@@ -68,15 +146,13 @@ describe "quizzes" do
         end
 
         it "should show the resume quiz button if the quiz unlock_at date is < now" do
-          pending('193')
-          update_quiz_lock(Time.now - 1.day.ago, Time.now - 10.minutes.ago)
+          update_quiz_lock(nil, 10.minutes.ago)
           get "/courses/#{@course.id}/quizzes/#{@quiz.id}"
           validate_resume_button_text(@resume_text)
         end
 
         it "should not show the resume quiz button if quiz is locked" do
-          pending('193')
-          update_quiz_lock(Time.now - 5.minutes, nil)
+          update_quiz_lock(5.minutes.ago, nil)
           get "/courses/#{@course.id}/quizzes/#{@quiz.id}"
           f('#not_right_side .take_quiz_button').should_not be_present
         end
@@ -88,7 +164,7 @@ describe "quizzes" do
 
         it "should not see unpublished warning" do
           # set to unpublished state
-          @quiz.last_edited_at = Time.now
+          @quiz.last_edited_at = Time.now.utc
           @quiz.published_at   = 1.hour.ago
           @quiz.save!
 
@@ -105,7 +181,7 @@ describe "quizzes" do
         # setup a quiz and start taking it
         quiz_with_new_questions(!:goto_edit)
         get "/courses/#{@course.id}/quizzes/#{@quiz.id}"
-        expect_new_page_load { driver.find_element(:link_text, 'Take the Quiz').click }
+        expect_new_page_load { f("#take_quiz_link").click }
         sleep 1 # sleep because display is updated on timer, not ajax callback
 
         # answer a question, and check that it is saved
@@ -140,32 +216,16 @@ describe "quizzes" do
 
   context "who closes the session without submitting" do
     it "should automatically grade the submission when it becomes overdue" do
-      job_tag = 'QuizSubmission#grade_if_untaken'
+      pending('disabled because of regression')
+
+      job_tag = 'Quizzes::QuizSubmission#grade_if_untaken'
 
       course_with_student_logged_in
-
-      quiz = quiz_model({
-        :course => @course,
-        :time_limit => 5
-      })
-
-      quiz.quiz_questions.create!(:question_data => {
-          :name => 'test 3',
-          :question_type => 'multiple_choice_question',
-          :answers => {'answer_0' => {'answer_text' => '0'}, 'answer_1' => {'answer_text' => '1'}}})
-      quiz.generate_quiz_data
-      quiz.save
+      quiz = prepare_quiz
 
       Delayed::Job.find_by_tag(job_tag).should == nil
 
-      get "/courses/#{@course.id}/quizzes/#{@quiz.id}/take?user_id=#{@user.id}"
-      expect_new_page_load { driver.find_element(:link_text, 'Take the Quiz').click }
-
-      answer_id = quiz.stored_questions[0][:answers][0][:id]
-
-      fj("input[type=radio][value=#{answer_id}]").click
-
-      wait_for_js
+      take_and_answer_quiz(false)
 
       driver.execute_script("window.close()")
 
@@ -183,6 +243,42 @@ describe "quizzes" do
 
       quiz_sub.reload
       quiz_sub.workflow_state.should == "complete"
+    end
+  end
+
+  context "correct answer visibility" do
+    before(:each) do
+      course_with_student_logged_in
+      prepare_quiz
+    end
+
+    it "should not highlight correct answers" do
+      @quiz.update_attributes(show_correct_answers: false)
+      @quiz.save!
+
+      take_and_answer_quiz
+
+      ff('.correct_answer').length.should == 0
+    end
+
+    it "should highlight correct answers" do
+      @quiz.update_attributes(show_correct_answers: true)
+      @quiz.save!
+
+      take_and_answer_quiz
+
+      ff('.correct_answer').length.should > 0
+    end
+
+    it "should always highlight incorrect answers" do
+      @quiz.update_attributes(show_correct_answers: false)
+      @quiz.save!
+
+      take_and_answer_quiz do |answers|
+        answers[1][:id] # don't answer
+      end
+
+      ff('.incorrect.answer_arrow').length.should > 0
     end
   end
 end

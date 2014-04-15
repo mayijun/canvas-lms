@@ -26,11 +26,9 @@ class Rubric < ActiveRecord::Base
   has_many :rubric_assessments, :through => :rubric_associations, :dependent => :destroy
   has_many :learning_outcome_alignments, :as => :content, :class_name => 'ContentTag', :conditions => ['content_tags.tag_type = ? AND content_tags.workflow_state != ?', 'learning_outcome', 'deleted'], :include => :learning_outcome
 
-  before_save :default_values
-  after_save :update_alignments
   validates_presence_of :context_id, :context_type, :workflow_state
   validates_length_of :description, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
-  validates_length_of :title, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
+  validates_length_of :title, :maximum => maximum_string_length, :allow_nil => true, :allow_blank => true
 
   before_save :default_values
   after_save :update_alignments
@@ -127,7 +125,10 @@ class Rubric < ActiveRecord::Base
   def touch_associations
     if alignments_need_update?
       # associations might need to update their alignments also
-      rubric_associations.bookmarked.each &:touch
+      rubric_associations.bookmarked.each { |ra|
+        ra.skip_updating_points_possible = @skip_updating_points_possible
+        ra.save
+      }
     end
   end
 
@@ -154,7 +155,7 @@ class Rubric < ActiveRecord::Base
   def criteria
     self.data
   end
-  
+
   def associate_with(association, context, opts={})
     if opts[:purpose] == "grading"
       res = self.rubric_associations.find_by_association_id_and_association_type_and_purpose(association.id, association.class.to_s, 'grading')
@@ -164,17 +165,23 @@ class Rubric < ActiveRecord::Base
       return res if res
     end
     purpose = opts[:purpose] || "unknown"
-    self.rubric_associations.create(:association => association, :context => context, :use_for_grading => !!opts[:use_for_grading], :purpose => purpose)
+    ra = rubric_associations.build :association_object => association,
+                                   :context => context,
+                                   :use_for_grading => !!opts[:use_for_grading],
+                                   :purpose => purpose
+    ra.skip_updating_points_possible = @skip_updating_points_possible
+    ra.tap &:save
   end
 
   def update_with_association(current_user, rubric_params, context, association_params)
     self.free_form_criterion_comments = rubric_params[:free_form_criterion_comments] == '1' if rubric_params[:free_form_criterion_comments]
     self.user ||= current_user
     rubric_params[:hide_score_total] ||= association_params[:hide_score_total]
+    @skip_updating_points_possible = association_params[:skip_updating_points_possible]
     self.update_criteria(rubric_params)
-    RubricAssociation.generate(current_user, self, context, association_params) if association_params[:association] || association_params[:url]
+    RubricAssociation.generate(current_user, self, context, association_params) if association_params[:association_object] || association_params[:url]
   end
-  
+
   def unique_item_id(id=nil)
     @used_ids ||= {}
     while !id || @used_ids[id]
@@ -238,7 +245,7 @@ class Rubric < ActiveRecord::Base
         rating[:id] = unique_item_id(rating_data[:id])
         ratings[jdx.to_i] = rating
       end
-      criterion[:ratings] = ratings.select{|r| r}.sort_by{|r| [-1 * (r[:points] || 0), r[:description] || SortFirst]}
+      criterion[:ratings] = ratings.select{|r| r}.sort_by{|r| [-1 * (r[:points] || 0), r[:description] || CanvasSort::First]}
       criterion[:points] = criterion[:ratings].map{|r| r[:points]}.max || 0
       points_possible += criterion[:points] unless criterion[:ignore_for_scoring]
       criteria[idx.to_i] = criterion

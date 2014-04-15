@@ -119,8 +119,8 @@ module AuthenticationMethods
         @developer_key ||
           request.get? ||
           !allow_forgery_protection ||
-          BreachMitigation::MaskingSecrets.valid_authenticity_token?(session, form_authenticity_param) ||
-          BreachMitigation::MaskingSecrets.valid_authenticity_token?(session, request.headers['X-CSRF-Token']) ||
+          CanvasBreachMitigation::MaskingSecrets.valid_authenticity_token?(session, form_authenticity_param) ||
+          CanvasBreachMitigation::MaskingSecrets.valid_authenticity_token?(session, request.headers['X-CSRF-Token']) ||
           raise(AccessTokenError)
       end
     end
@@ -214,7 +214,7 @@ module AuthenticationMethods
 
   def store_location(uri=nil, overwrite=true)
     if overwrite || !session[:return_to]
-      uri ||= request.get? ? request.request_uri : request.referrer
+      uri ||= request.get? ? request.fullpath : request.referrer
       session[:return_to] = clean_return_to(uri)
     end
   end
@@ -250,13 +250,13 @@ module AuthenticationMethods
     if @current_user
       render :json => {
                :status => I18n.t('lib.auth.status_unauthorized', 'unauthorized'),
-               :errors => { :message => I18n.t('lib.auth.not_authorized', "user not authorized to perform that action") }
+               :errors => [{ :message => I18n.t('lib.auth.not_authorized', "user not authorized to perform that action") }]
              },
              :status => :unauthorized
     else
       render :json => {
                :status => I18n.t('lib.auth.status_unauthenticated', 'unauthenticated'),
-               :errors => { :message => I18n.t('lib.auth.authentication_required', "user authorization required") }
+               :errors => [{ :message => I18n.t('lib.auth.authentication_required', "user authorization required") }]
              },
              :status => :unauthorized
     end
@@ -308,6 +308,7 @@ module AuthenticationMethods
   end
 
   def initiate_saml_login(current_host=nil, aac=nil)
+    increment_saml_stat("login_attempt")
     reset_session_for_login
     aac ||= @domain_root_account.account_authorization_config
     settings = aac.saml_settings(current_host)
@@ -328,5 +329,9 @@ module AuthenticationMethods
 
   def delegated_auth_redirect_uri(uri)
     uri
+  end
+
+  def increment_saml_stat(key)
+    CanvasStatsd::Statsd.increment("saml.#{CanvasStatsd::Statsd.escape(request.host)}.#{key}")
   end
 end

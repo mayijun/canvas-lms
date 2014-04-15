@@ -1,7 +1,7 @@
 require File.expand_path(File.dirname(__FILE__) + '/helpers/conversations_common')
 
 describe "conversations new" do
-  it_should_behave_like "in-process server selenium tests"
+  include_examples "in-process server selenium tests"
 
   def conversations_url
     "/conversations"
@@ -64,10 +64,31 @@ describe "conversations new" do
     wait_for_ajaximations
   end
 
-  def click_star_toggle_menu_item()
-    f('#admin-btn').click
-    f("#star-toggle-btn").click
-    wait_for_ajaximations
+  def click_star_toggle_menu_item
+    keep_trying_until do
+      driver.execute_script(%q{$('#admin-btn').hover().click()})
+      sleep 1
+      driver.execute_script(%q{$('#star-toggle-btn').hover().click()})
+      wait_for_ajaximations
+    end
+  end
+
+  def click_unread_toggle_menu_item
+    keep_trying_until do
+      driver.execute_script(%q{$('#admin-btn').hover().click()})
+      sleep 1
+      driver.execute_script(%q{$('#mark-unread-btn').hover().click()})
+      wait_for_ajaximations
+    end
+  end
+
+  def click_read_toggle_menu_item
+    keep_trying_until do
+      driver.execute_script(%q{$('#admin-btn').hover().click()})
+      sleep 1
+      driver.execute_script(%q{$('#mark-read-btn').hover().click()})
+      wait_for_ajaximations
+    end
   end
 
   def select_message_course(new_course)
@@ -77,9 +98,12 @@ describe "conversations new" do
   end
 
   def add_message_recipient(to)
+    synthetic = !(to.instance_of?(User) || to.instance_of?(String))
     to = to.name if to.respond_to?(:name)
     get_message_recipients_input.send_keys(to)
     keep_trying_until { fj(".ac-result:contains('#{to}')") }.click
+    return unless synthetic
+    keep_trying_until { fj(".ac-result:contains('All in #{to}')") }.click
   end
 
   def set_message_subject(subject)
@@ -103,6 +127,12 @@ describe "conversations new" do
     set_message_subject(options[:subject]) if options[:subject]
     set_message_body(options[:body]) if options[:body]
     click_send if options[:send].nil? || options[:send]
+  end
+
+  def run_progress_job
+    return unless progress = Progress.where(tag: 'conversation_batch_update').first
+    job = Delayed::Job.find(progress.delayed_job_id)
+    job.invoke_job
   end
 
   before do
@@ -141,7 +171,8 @@ describe "conversations new" do
       get_conversations
       compose to: [@s1], subject: 'context-free', body: 'hallo!'
       c = @s1.conversations.last.conversation
-      c.subject.should ==('context-free')
+      c.subject.should == 'context-free'
+      c.context.should == Account.default
     end
 
     it "should not allow non-admins to send a message without picking a context" do
@@ -164,6 +195,58 @@ describe "conversations new" do
       wait_for_ajaximations
       f('.ac-token').should_not be_nil
     end
+
+    context "user notes" do
+      before(:each) do
+        @course.account.update_attribute(:enable_user_notes, true)
+        user_session(@teacher)
+        get_conversations
+      end
+
+      it "should be allowed on new private conversations with students" do
+        compose course: @course, to: [@s1], body: 'hallo!', send: false
+
+        checkbox = f(".user_note")
+        checkbox.should be_displayed
+        checkbox.click
+
+        count = @s1.user_notes.count
+        click_send
+        @s1.user_notes.reload.count.should == count + 1
+      end
+
+      it "should not be allowed if disabled" do
+        @course.account.update_attribute(:enable_user_notes, false)
+        get_conversations
+        compose course: @course, to: [@s1], body: 'hallo!', send: false
+        f(".user_note").should_not be_displayed
+      end
+
+      it "should not be allowed for students" do
+        @s1.preferences[:use_new_conversations] = true
+        @s1.save!
+        user_session(@s1)
+        get_conversations
+        compose course: @course, to: [@s2], body: 'hallo!', send: false
+        f(".user_note").should_not be_displayed
+      end
+
+      it "should not be allowed with multiple recipients" do
+        compose course: @course, to: [@s1, @s2], body: 'hallo!', send: false
+        f(".user_note").should_not be_displayed
+      end
+
+      it "should not be allowed with non-student recipient" do
+        compose course: @course, to: [@teacher], body: 'hallo!', send: false
+        f(".user_note").should_not be_displayed
+      end
+
+      it "should not be allowed with group recipient" do
+        @group = @course.groups.create(:name => "the group")
+        compose course: @course, to: [@group], body: 'hallo!', send: false
+        f(".user_note").should_not be_displayed
+      end
+    end
   end
 
   describe "replying" do
@@ -183,7 +266,10 @@ describe "conversations new" do
       fj('#compose-message-course').should have_attribute(:disabled, 'true')
       fj('#compose-message-course').should have_value(@course.id.to_s)
       fj('#compose-message-subject').should have_attribute(:disabled, 'true')
+      fj('#compose-message-subject').should_not be_displayed
       fj('#compose-message-subject').should have_value(@convo.subject)
+      fj('.message_subject_ro').should be_displayed
+      fj('.message_subject_ro').text.should == @convo.subject
     end
 
     it "should address replies to the most recent author by default" do
@@ -344,6 +430,7 @@ describe "conversations new" do
       wait_for_ajaximations
       click_star_toggle_menu_item
       f('.active', unstarred_elt).should be_present
+      run_progress_job
       @conv_unstarred.reload.starred.should be_true
     end
 
@@ -354,8 +441,106 @@ describe "conversations new" do
       wait_for_ajaximations
       click_star_toggle_menu_item
       f('.active', starred_elt).should be_nil
+      run_progress_job
       @conv_starred.reload.starred.should be_false
     end
   end
 
+  describe "search" do
+    before do
+      @conv1 = conversation(@teacher, @s1)
+      @conv2 = conversation(@teacher, @s2)
+    end
+
+    it "should allow finding messages by recipient" do
+      get_conversations
+      name = @s2.name
+      f('[role=main] header [role=search] input').send_keys(name)
+      keep_trying_until { fj(".ac-result:contains('#{name}')") }.click
+      conversation_elements.length.should == 1
+    end
+  end
+
+  describe "multi-select" do
+    before(:each) do
+      @conversations = [conversation(@teacher, @s1, @s2, workflow_state: 'read'),
+                        conversation(@teacher, @s1, @s2, workflow_state: 'read')]
+    end
+
+    let :modifier do
+      if driver.execute_script('return !!window.navigator.userAgent.match(/Macintosh/)')
+        :meta
+      else
+        :control
+      end
+    end
+
+    def select_all_conversations
+      driver.action.key_down(modifier).perform
+      ff('.messages li').each do |message|
+        message.click
+      end
+      driver.action.key_up(modifier).perform
+    end
+
+    it "should select multiple conversations" do
+      get_conversations
+      select_all_conversations
+      ff('.messages li.active').count.should == 2
+    end
+
+    it "should select all conversations" do
+      get_conversations
+      driver.action.key_down(modifier)
+        .send_keys('a')
+        .key_up(modifier)
+        .perform
+      ff('.messages li.active').count.should == 2
+    end
+
+    it "should archive multiple conversations" do
+      get_conversations
+      select_all_conversations
+      f('#archive-btn').click
+      wait_for_ajaximations
+      conversation_elements.count.should == 0
+      run_progress_job
+      @conversations.each { |c| c.reload.should be_archived }
+    end
+
+    it "should delete multiple conversations" do
+      get_conversations
+      select_all_conversations
+      f('#delete-btn').click
+      driver.switch_to.alert.accept
+      wait_for_ajaximations
+      conversation_elements.count.should == 0
+    end
+
+    it "should mark multiple conversations as unread" do
+      pending('breaks b/c jenkins is weird')
+      get_conversations
+      select_all_conversations
+      click_unread_toggle_menu_item
+      keep_trying_until { ffj('.read-state[aria-checked=false]').count.should == 2 }
+    end
+
+    it "should mark multiple conversations as unread" do
+      pending('breaks b/c jenkins is weird')
+      get_conversations
+      select_all_conversations
+      click_read_toggle_menu_item
+      keep_trying_until { ffj('.read-state[aria-checked=true]').count.should == 2 }
+    end
+
+    it "should star multiple conversations" do
+      pending('breaks b/c jenkins is weird')
+      get_conversations
+      select_all_conversations
+      click_star_toggle_menu_item
+      run_progress_job
+      keep_trying_until { ff('.star-btn.active').count.should == 2 }
+      @conversations.each { |c| c.reload.should be_starred }
+    end
+  end
 end

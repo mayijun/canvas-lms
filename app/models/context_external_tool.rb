@@ -31,29 +31,6 @@ class ContextExternalTool < ActiveRecord::Base
     state :deleted
   end
 
-  def create_launch(context, user, return_url, opts = {})
-    # resolve the url based on selection_type, falling back to the tool url (unless overridden)
-    resource_url = opts[:resource_url]
-    selection_type = opts[:selection_type]
-
-    # if this is an assessment enforce the correct resource_url
-    if selection_type
-      if self.settings[selection_type.to_sym]
-        resource_url ||= self.settings[selection_type.to_sym][:url] if selection_type
-      end
-    end
-    resource_url ||= self.url
-
-    # generate the launch
-    BasicLTI::ToolLaunch.new(:url => resource_url,
-                             :tool => self,
-                             :user => user,
-                             :context => context,
-                             :link_code => context.opaque_identifier(:asset_string),
-                             :return_url => return_url,
-                             :resource_type => selection_type)
-  end
-
   set_policy do
     given { |user, session| self.cached_context_grants_right?(user, session, :update) }
     can :read and can :update and can :delete
@@ -122,7 +99,7 @@ class ContextExternalTool < ActiveRecord::Base
   def validate_vendor_help_link
     return if self.vendor_help_link.blank?
     begin
-      value, uri = CustomValidations.validate_url(self.vendor_help_link)
+      value, uri = CanvasHttp.validate_url(self.vendor_help_link)
       self.vendor_help_link = uri.to_s
     rescue URI::InvalidURIError, ArgumentError
       self.vendor_help_link = nil
@@ -383,27 +360,43 @@ class ContextExternalTool < ActiveRecord::Base
       26
     end
   end
-  
-  def matches_url?(url, match_queries_exactly=true)
+
+  def standard_url
     if !defined?(@standard_url)
       @standard_url = !self.url.blank? && ContextExternalTool.standardize_url(self.url)
     end
+    @standard_url
+  end
+  
+  def matches_url?(url, match_queries_exactly=true)
     if match_queries_exactly
       url = ContextExternalTool.standardize_url(url)
-      return true if url == @standard_url
-    elsif @standard_url.present?
+      return true if url == standard_url
+    elsif standard_url.present?
       if !defined?(@url_params)
-        res = URI.parse(@standard_url)
+        res = URI.parse(standard_url)
         @url_params = res.query.present? ? res.query.split(/&/) : []
       end
       res = URI.parse(url).normalize
       res.query = res.query.split(/&/).select{|p| @url_params.include?(p)}.sort.join('&') if res.query.present?
       res.query = nil if res.query.blank?
       res.normalize!
-      return true if res.to_s == @standard_url
+      return true if res.to_s == standard_url
     end
     host = URI.parse(url).host rescue nil
     !!(host && ('.' + host).match(/\.#{domain}\z/))
+  end
+
+  def matches_domain?(url)
+    url = ContextExternalTool.standardize_url(url)
+    host = URI.parse(url).host
+    if domain
+      domain == host
+    elsif standard_url
+      URI.parse(standard_url).host == host
+    else
+      false
+    end
   end
   
   def self.all_tools_for(context, options={})
@@ -462,14 +455,12 @@ class ContextExternalTool < ActiveRecord::Base
       end
     end
 
-    # Always use the preferred tool if it's valid and has a resource_selection configuration.
-    # If it didn't have resource_selection then a change in the URL would have been done manually,
-    # and there's no reason to assume a different URL was intended. With a resource_selection 
-    # insertion, there's a stronger chance that a different URL was intended.
     preferred_tool = ContextExternalTool.active.find_by_id(preferred_tool_id)
-    return preferred_tool if preferred_tool && preferred_tool.resource_selection
+    if preferred_tool && contexts.member?(preferred_tool.context) && preferred_tool.matches_domain?(url)
+      return preferred_tool
+    end
 
-    sorted_external_tools = contexts.collect{|context| context.context_external_tools.active.sort_by{|t| [t.precedence, t.id == preferred_tool_id ? SortFirst : SortLast] }}.flatten(1)
+    sorted_external_tools = contexts.collect{|context| context.context_external_tools.active.sort_by{|t| [t.precedence, t.id == preferred_tool_id ? CanvasSort::First : CanvasSort::Last] }}.flatten(1)
 
     res = sorted_external_tools.detect{|tool| tool.url && tool.matches_url?(url) }
     return res if res
@@ -484,9 +475,11 @@ class ContextExternalTool < ActiveRecord::Base
     nil
   end
   
-  scope :having_setting, lambda { |setting| where("has_#{setting.to_s}" => true) }
+  scope :having_setting, lambda { |setting| setting ? where("has_#{setting.to_s}" => true) : scoped }
 
   def self.find_for(id, context, type)
+    id = id[Api::ID_REGEX] if id.is_a?(String)
+    raise ActiveRecord::RecordNotFound unless id.present?
     tool = context.context_external_tools.having_setting(type).find_by_id(id)
     if !tool && context.is_a?(Group)
       context = context.context
@@ -579,6 +572,18 @@ class ContextExternalTool < ActiveRecord::Base
     item.save!
     context.imported_migration_items << item if context.respond_to?(:imported_migration_items) && context.imported_migration_items && item.new_record?
     item
+  end
+
+  def opaque_identifier_for(asset)
+    ContextExternalTool.opaque_identifier_for(asset, self.shard)
+  end
+
+  def self.opaque_identifier_for(asset, shard)
+    shard.activate do
+      str = asset.asset_string.to_s
+      raise "Empty value" if str.blank?
+      Canvas::Security.hmac_sha1(str, shard.settings[:encryption_key])
+    end
   end
 
   private

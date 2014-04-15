@@ -26,6 +26,7 @@ class Mailer < ActionMailer::Base
     class Formatter
       def initialize(target)
         @target = target
+        @parts = []
       end
 
       # e.g. the "render text: ..." in format.html{ render text: ... }
@@ -33,21 +34,30 @@ class Mailer < ActionMailer::Base
         params[:text]
       end
 
-      # e.g. format.html{ render text: ... }
-      def html
-        body = yield self
-        @hasHTML = true
-        @target.content_type 'multipart/alternative'
-        @target.part content_type: 'text/html; charset=utf-8', body: body
+      # e.g. format.text{ render text: ... }
+      def text(&block)
+        @parts << {
+          content_type: 'text/plain; charset=utf-8',
+          body: instance_eval(&block)
+        }
       end
 
-      # e.g. format.text{ render text: ... }
-      def text
-        body = yield self
-        if @hasHTML
-          @target.part content_type: 'text/plain; charset=utf-8', body: body
-        else
-          @target.body body
+      # e.g. format.html{ render text: ... }
+      def html(&block)
+        @parts << {
+          content_type: 'text/html; charset=utf-8',
+          body: instance_eval(&block)
+        }
+      end
+
+      def commit
+        if @parts.size > 1
+          @target.content_type 'multipart/alternative'
+          @parts.each{ |part| @target.part part }
+        elsif @parts.size == 1
+          part = @parts.first
+          @target.content_type part[:content_type]
+          @target.body part[:body]
         end
       end
     end
@@ -61,7 +71,9 @@ class Mailer < ActionMailer::Base
       from params[:from]
       reply_to params[:reply_to]
       subject params[:subject]
-      yield Formatter.new(self)
+      formatter = Formatter.new(self)
+      yield formatter
+      formatter.commit
       self
     end
 
@@ -74,17 +86,17 @@ class Mailer < ActionMailer::Base
       end
 
       def deliver
-        Mailer.deliver_message(@message)
+        Mailer.deliver_create_message(@message)
       end
     end
 
-    def self.message(m)
+    def self.create_message(m)
       Proxy.new(m)
     end
   end
 
   # define in rails3-style
-  def message(m)
+  def create_message(m)
     # notifications have context, bounce replies don't.
     headers('Auto-Submitted' => m.context ? 'auto-generated' : 'auto-replied')
 
@@ -99,8 +111,8 @@ class Mailer < ActionMailer::Base
     params[:bcc] = m.bcc if m.bcc
 
     mail(params) do |format|
-      format.html{ render text: m.html_body } if m.html_body
       format.text{ render text: m.body }
+      format.html{ render text: m.html_body } if m.html_body
     end
   end
 end

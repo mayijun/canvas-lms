@@ -47,24 +47,31 @@ define [
 
     toggleGroupCategoryOptions: =>
       @$groupCategoryOptions.toggleAccessibly @$hasGroupCategory.prop('checked')
+
       if @$hasGroupCategory.prop('checked') and @groupCategories.length == 0
         @showGroupCategoryCreateDialog()
 
     toJSON: =>
       frozenAttributes = @parentModel.frozenAttributes()
+      groupCategoryFrozen = _.include frozenAttributes, 'group_category_id'
+      groupCategoryLocked = @parentModel.attributes.has_submitted_submissions
 
       groupCategoryId: @parentModel.groupCategoryId()
       groupCategories: @groupCategories
       gradeGroupStudentsIndividually: @parentModel.gradeGroupStudentsIndividually()
-      frozenAttributes: frozenAttributes
-      groupCategoryIdFrozen: _.include(frozenAttributes, 'group_category_id')
+      groupCategoryLocked: groupCategoryLocked
+
+      hasGroupCategoryDisabled:  groupCategoryFrozen || groupCategoryLocked
+      gradeIndividuallyDisabled: groupCategoryFrozen
+      groupCategoryIdDisabled:   groupCategoryFrozen || groupCategoryLocked
+
       nested: @nested
       prefix: 'assignment' if @nested
 
     filterFormData: (data) =>
       hasGroupCategory = data.has_group_category
       delete data.has_group_category
-      unless hasGroupCategory is '1'
+      if hasGroupCategory == '0'
         data.group_category_id = null
         data.grade_group_students_individually = false
       data
