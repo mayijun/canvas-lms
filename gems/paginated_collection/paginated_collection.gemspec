@@ -21,7 +21,7 @@ Gem::Specification.new do |spec|
   if CANVAS_RAILS3
     spec.add_dependency "folio-pagination", "0.0.7"
     spec.add_dependency "will_paginate", "3.0.4"
-    spec.add_dependency "rails", "3.2.17"
+    spec.add_dependency "rails", "~> 3.2"
   else
     spec.add_dependency "folio-pagination-legacy", "0.0.3"
     spec.add_dependency "will_paginate", "2.3.15"

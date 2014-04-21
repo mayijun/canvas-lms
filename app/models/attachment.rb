@@ -38,7 +38,7 @@ class Attachment < ActiveRecord::Base
   attr_accessor :ok_for_submission_comment
 
   MAX_SCRIBD_ATTEMPTS = 3
-  MAX_CROCODOC_ATTEMPTS = 2
+
   # This value is used as a flag for when we are skipping the submit to scribd for this attachment
   SKIPPED_SCRIBD_ATTEMPTS = 25
 
@@ -286,58 +286,6 @@ class Attachment < ActiveRecord::Base
       delay = Setting.get('attachment_build_media_object_delay_seconds', 10.to_s).to_i
       MediaObject.send_later_enqueue_args(:add_media_files, { :run_at => delay.seconds.from_now, :priority => Delayed::LOWER_PRIORITY }, self, false)
     end
-  end
-
-  def self.process_migration(data, migration)
-    attachments = data['file_map'] ? data['file_map']: {}
-    # TODO i18n
-    attachments.values.each do |att|
-      if !att['is_folder'] && (migration.import_object?("attachments", att['migration_id']) || migration.import_object?("files", att['migration_id']))
-        begin
-          import_from_migration(att, migration.context)
-        rescue
-          migration.add_import_warning(t('#migration.file_type', "File"), (att[:display_name] || att[:path_name]), $!)
-        end
-      end
-    end
-
-    if data[:locked_folders]
-      data[:locked_folders].each do |path|
-        # TODO i18n
-        if f = migration.context.active_folders.find_by_full_name("course files/#{path}")
-          f.locked = true
-          f.save
-        end
-      end
-    end
-    if data[:hidden_folders]
-      data[:hidden_folders].each do |path|
-        # TODO i18n
-        if f = migration.context.active_folders.find_by_full_name("course files/#{path}")
-          f.workflow_state = 'hidden'
-          f.save
-        end
-      end
-    end
-  end
-
-  def self.import_from_migration(hash, context, item=nil)
-    hash = hash.with_indifferent_access
-    hash[:migration_id] ||= hash[:attachment_id] || hash[:file_id]
-    return nil if hash[:migration_id] && hash[:files_to_import] && !hash[:files_to_import][hash[:migration_id]]
-    item ||= find_by_context_type_and_context_id_and_id(context.class.to_s, context.id, hash[:id])
-    item ||= find_by_context_type_and_context_id_and_migration_id(context.class.to_s, context.id, hash[:migration_id]) if hash[:migration_id]
-    item ||= Attachment.find_from_path(hash[:path_name], context)
-    if item
-      item.context = context
-      item.migration_id = hash[:migration_id]
-      item.locked = true if hash[:locked]
-      item.file_state = 'hidden' if hash[:hidden]
-      item.display_name = hash[:display_name] if hash[:display_name]
-      item.save_without_broadcasting!
-      context.imported_migration_items << item if context.imported_migration_items
-    end
-    item
   end
 
   def assert_attachment
@@ -835,7 +783,7 @@ class Attachment < ActiveRecord::Base
       to_use = thumbnail_for_size(geometry) || self.thumbnail
       to_use.cached_s3_url
     elsif self.media_object && self.media_object.media_id
-      Kaltura::ClientV3.new.thumbnail_url(self.media_object.media_id,
+      CanvasKaltura::ClientV3.new.thumbnail_url(self.media_object.media_id,
                                           :width => options[:width] || 140,
                                           :height => options[:height] || 100,
                                           :vid_sec => options[:video_seconds] || 5)
@@ -1438,10 +1386,10 @@ class Attachment < ActiveRecord::Base
     update_attribute(:workflow_state, 'errored')
     ErrorReport.log_exception(:crocodoc, e, :attachment_id => id)
 
-    if attempt < MAX_CROCODOC_ATTEMPTS
+    if attempt <= Setting.get('max_crocodoc_attempts', '5').to_i
       send_later_enqueue_args :submit_to_crocodoc, {
         :n_strand => 'crocodoc_retries',
-        :run_at => 30.seconds.from_now,
+        :run_at => (5 * attempt).minutes.from_now,
         :max_attempts => 1,
         :priority => Delayed::LOW_PRIORITY,
       }, attempt + 1

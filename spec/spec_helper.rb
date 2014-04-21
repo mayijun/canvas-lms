@@ -25,10 +25,10 @@ if CANVAS_RAILS2
   end
 end
 
-unless CANVAS_RAILS2 || ENV['NO_RERUN']
+unless CANVAS_RAILS2
   Spec.configure do |c|
    c.treat_symbols_as_metadata_keys_with_true_values = true
-  end 
+  end
 
   RSpec.configure do |c|
     c.around(:each) do |example|
@@ -37,14 +37,16 @@ unless CANVAS_RAILS2 || ENV['NO_RERUN']
         Timeout::timeout(180) {
           example.run
         }
-        e = @example.instance_variable_get('@exception')
-        if !e.nil? && (attempts += 1) < 2
-          puts "FAILURE: #{@example.description} \n #{e}".red
-          puts "RETRYING: #{@example.description}".yellow
-          @example.instance_variable_set('@exception', nil)
-          redo
-        elsif e.nil? && attempts != 0
-          puts "SUCCESS: retry passed for \n #{@example.description}".green
+        if ENV['AUTORERUN']
+          e = @example.instance_variable_get('@exception')
+          if !e.nil? && (attempts += 1) < 2 && !example.metadata[:no_retry]
+            puts "FAILURE: #{@example.description} \n #{e}".red
+            puts "RETRYING: #{@example.description}".yellow
+            @example.instance_variable_set('@exception', nil)
+            redo
+          elsif e.nil? && attempts != 0
+            puts "SUCCESS: retry passed for \n #{@example.description}".green
+          end
         end
       end until true
     end
@@ -636,12 +638,12 @@ end
   end
 
   def student_in_section(section, opts={})
-    user
-    enrollment = section.course.enroll_user(@user, 'StudentEnrollment', :section => section)
-    @user.save!
+    student = opts.fetch(:user) { user }
+    enrollment = section.course.enroll_user(student, 'StudentEnrollment', :section => section)
+    student.save!
     enrollment.workflow_state = 'active'
     enrollment.save!
-    @user
+    student
   end
 
   def teacher_in_course(opts={})
@@ -1108,7 +1110,7 @@ end
 
   def stub_kaltura
     # trick kaltura into being activated
-    Kaltura::ClientV3.stubs(:config).returns({
+    CanvasKaltura::ClientV3.stubs(:config).returns({
                                                  'domain' => 'kaltura.example.com',
                                                  'resource_domain' => 'kaltura.example.com',
                                                  'partner_id' => '100',

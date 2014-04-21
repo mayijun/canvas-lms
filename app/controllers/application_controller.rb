@@ -137,6 +137,12 @@ class ApplicationController < ActionController::Base
     raise RequestError.new(cause, status)
   end
 
+  unless CANVAS_RAILS2
+    def rescue_action_dispatch_exception
+      rescue_action_in_public(request.env['action_dispatch.exception'])
+    end
+  end
+
   protected
 
   def assign_localizer
@@ -822,6 +828,10 @@ class ApplicationController < ActionController::Base
         access_context = @context.is_a?(UserProfile) ? @context.user : @context
         @access.log access_context, @accessed_asset
 
+        if @page_view.nil? && page_views_enabled? && %w{participate submit}.include?(@accessed_asset[:level])
+          generate_page_view
+        end
+
         if @page_view
           @page_view.participated = %w{participate submit}.include?(@accessed_asset[:level])
           @page_view.asset_user_access = @access
@@ -1272,7 +1282,7 @@ class ApplicationController < ActionController::Base
       elsif feature == :etherpad
         !!EtherpadCollaboration.config
       elsif feature == :kaltura
-        !!Kaltura::ClientV3.config
+        !!CanvasKaltura::ClientV3.config
       elsif feature == :web_conferences
         !!WebConference.config
       elsif feature == :scribd
@@ -1399,11 +1409,9 @@ class ApplicationController < ActionController::Base
     bank
   end
 
-  # refs #6632 -- once the speed grader ipad app is upgraded, we can remove these exceptions
-  SKIP_JSON_CSRF_REGEX = %r{\A(?:/login|/logout|/dashboard/comment_session)}
   def prepend_json_csrf?
     requested_json = request.headers['Accept'] =~ %r{application/json}
-    request.get? && !requested_json && in_app? && !request.path.match(SKIP_JSON_CSRF_REGEX)
+    request.get? && !requested_json && in_app?
   end
 
   def in_app?
@@ -1705,7 +1713,7 @@ class ApplicationController < ActionController::Base
     js_env hash
   end
 
-  ## @real_current_user first ensures that a masquerading user never sees the
+  ## having @real_current_user first ensures that a masquerading user never sees the
   ## masqueradee's files, but in general you may want to block access to google
   ## docs for masqueraders earlier in the request
   def google_docs_user

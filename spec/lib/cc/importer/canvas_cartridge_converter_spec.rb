@@ -344,9 +344,11 @@ describe "Canvas Cartridge importing" do
     @resource.create_learning_outcomes(builder)
     #convert to json
     doc = Nokogiri::XML(builder.target!)
-    hash = @converter.convert_learning_outcomes(doc)
+    data = @converter.convert_learning_outcomes(doc)
+    data = data.map{|h| h.with_indifferent_access}
+
     #import json into new course
-    LearningOutcome.process_migration({'learning_outcomes'=>hash}, @migration)
+    LearningOutcome.process_migration({'learning_outcomes'=>data}, @migration)
     @copy_to.save!
   end
   
@@ -964,7 +966,7 @@ XML
     ag.migration_id = "i713e960ab2685259505efeb08cd48a1d"
     ag.save!
     
-    Quizzes::Quiz.import_from_migration(quiz_hash, @copy_to, {})
+    Quizzes::QuizImporter.import_from_migration(quiz_hash, @copy_to, {})
     q = @copy_to.quizzes.find_by_migration_id("ie3d8f8adfad423eb225229c539cdc450")
     a = q.assignment
     a.assignment_group.id.should == ag.id

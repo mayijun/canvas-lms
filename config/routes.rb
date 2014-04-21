@@ -16,12 +16,8 @@ end
 routes.draw do
   resources :submission_comments, :only => :destroy
 
-  match 'inbox' => 'context#mark_inbox_as_read', :as => :mark_inbox_as_read, :via => :delete
   match 'inbox' => 'context#inbox', :as => :inbox
-  match 'inbox/:id' => 'context#destroy_inbox_item', :as => :destroy_inbox_item, :via => :delete
-  match 'inbox/:id' => 'context#inbox_item', :as => :inbox_item
 
-  match 'conversations/discussion_replies' => 'context#discussion_replies', :as => :discussion_replies
   match 'conversations/unread' => 'conversations#index', :as => :conversations_unread, :redirect_scope => 'unread'
   match 'conversations/starred' => 'conversations#index', :as => :conversations_starred, :redirect_scope => 'starred'
   match 'conversations/sent' => 'conversations#index', :as => :conversations_sent, :redirect_scope => 'sent'
@@ -314,6 +310,7 @@ routes.draw do
       match 'history' => 'quizzes/quizzes#history', :as => :history
       match 'statistics' => 'quizzes/quizzes#statistics', :as => :statistics
       match 'read_only' => 'quizzes/quizzes#read_only', :as => :read_only
+      match 'submission_html' => 'quizzes/quizzes#submission_html', :as => :submission_html
 
       collection do
         get :fabulous_quizzes
@@ -1334,6 +1331,11 @@ routes.draw do
       post "courses/:course_id/quizzes/:id/reorder", :action => :reorder, :path_name => 'course_quiz_reorder'
     end
 
+    scope(:controller => 'quizzes/quiz_submission_users') do
+      get "courses/:course_id/quizzes/:id/submission_users", :action => :index, :path_name => 'course_quiz_submission_users'
+      post "courses/:course_id/quizzes/:id/submission_users/message", :action => :message, :path_name => 'course_quiz_submission_users_message'
+    end
+
     scope(:controller => 'quizzes/quiz_groups') do
       post "courses/:course_id/quizzes/:quiz_id/groups", :action => :create, :path_name => 'course_quiz_group_create'
       put "courses/:course_id/quizzes/:quiz_id/groups/:id", :action => :update, :path_name => 'course_quiz_group_update'
@@ -1351,6 +1353,7 @@ routes.draw do
 
     scope(:controller => 'quizzes/quiz_reports') do
       post "courses/:course_id/quizzes/:quiz_id/reports", :action => :create, :path_name => 'course_quiz_reports_create'
+      get "courses/:course_id/quizzes/:quiz_id/reports", :action => :index, :path_name => 'course_quiz_reports'
       get "courses/:course_id/quizzes/:quiz_id/reports/:id", :action => :show, :path_name => 'course_quiz_report'
     end
 
@@ -1366,7 +1369,7 @@ routes.draw do
       post 'courses/:course_id/quizzes/:quiz_id/submissions/:id/complete', :action => :complete, :path_name => 'course_quiz_submission_complete'
     end
 
-    scope(:controller => :quiz_submission_questions) do
+    scope(:controller => 'quizzes/quiz_submission_questions') do
       get '/quiz_submissions/:quiz_submission_id/questions', :action => :index, :path_name => 'quiz_submission_questions'
       get '/quiz_submissions/:quiz_submission_id/questions/:id', :action => :show, :path_name => 'quiz_submission_question'
       put '/quiz_submissions/:quiz_submission_id/questions/:id', :action => :answer, :path_name => 'quiz_submission_question_answer'
@@ -1376,6 +1379,9 @@ routes.draw do
 
     scope(:controller => 'quizzes/quiz_ip_filters') do
       get 'courses/:course_id/quizzes/:quiz_id/ip_filters', :action => :index, :path_name => 'course_quiz_ip_filters'
+    end
+    scope(:controller => 'quizzes/quiz_statistics') do
+      get 'courses/:course_id/quizzes/:quiz_id/statistics', :action => :index, :path_name => 'course_quiz_statistics'
     end
 
     scope(:controller => :outcome_groups_api) do
@@ -1482,14 +1488,6 @@ routes.draw do
       get prefix, :action => :index, :path_name => "course_content_exports"
       post prefix, :action => :create
       get "#{prefix}/:id", :action => :show
-    end
-
-    scope(:controller => :data_exports_api, :module => :data_exports_api) do
-      prefix = "accounts/:account_id/data_exports"
-      get prefix, :action => :index, :path_name => "data_exports"
-      post prefix, :action => :create
-      get '#{prefix}/:id', :action => :show, :path_name => "data_export"
-      delete '#{prefix}/:id', :action => :cancel
     end
 
     scope(:controller => :grading_standards_api) do

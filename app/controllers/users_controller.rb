@@ -297,8 +297,8 @@ class UsersController < ApplicationController
   end
 
   def user_dashboard
-    if custom_dash = @domain_root_account.settings[:dashboard_url]
-      return redirect_to custom_dash
+    if custom_dashboard_url
+      return redirect_to custom_dashboard_url
     end
     check_incomplete_registration
     get_context
@@ -1178,7 +1178,7 @@ class UsersController < ApplicationController
   end
 
   def media_download
-    asset = Kaltura::ClientV3.new.media_sources(params[:entryId]).find{|a| a[:fileExt] == params[:type] }
+    asset = CanvasKaltura::ClientV3.new.media_sources(params[:entryId]).find{|a| a[:fileExt] == params[:type] }
     url = asset && asset[:url]
     if url
       if params[:redirect] == '1'

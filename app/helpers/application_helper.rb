@@ -322,14 +322,25 @@ module ApplicationHelper
 
   def include_css_bundles
     unless jammit_css_bundles.empty?
-      bundles = jammit_css_bundles.map{ |(bundle,plugin)| plugin ? "plugins_#{plugin}_#{bundle}" : bundle }
+      bundles = jammit_css_bundles.map do |(bundle,plugin)|
+        bundle = variant_name_for(bundle)
+        plugin ? "plugins_#{plugin}_#{bundle}" : bundle
+      end
       bundles << {:media => 'all'}
       include_stylesheets(*bundles)
     end
   end
 
+  def variant_name_for(bundle_name)
+    use_new_styles = @domain_root_account.feature_enabled?(:new_styles)
+    use_high_contrast = @current_user && @current_user.prefers_high_contrast?
+    variant = use_new_styles ? '_new_styles' : '_legacy'
+    variant += use_high_contrast ? '_high_contrast' : '_normal_contrast'
+    "#{bundle_name}#{variant}"
+  end
+
   def include_common_stylesheets
-    include_stylesheets :vendor, :common, media: "all"
+    include_stylesheets variant_name_for(:vendor), variant_name_for(:common), media: "all"
   end
 
   def section_tabs
@@ -494,8 +505,8 @@ module ApplicationHelper
   def inst_env
     global_inst_object = { :environment =>  Rails.env }
     {
-      :allowMediaComments       => Kaltura::ClientV3.config && @context.try_rescue(:allow_media_comments?),
-      :kalturaSettings          => Kaltura::ClientV3.config.try(:slice, 'domain', 'resource_domain', 'rtmp_domain', 'partner_id', 'subpartner_id', 'player_ui_conf', 'player_cache_st', 'kcw_ui_conf', 'upload_ui_conf', 'max_file_size_bytes', 'do_analytics', 'use_alt_record_widget', 'hide_rte_button', 'js_uploader'),
+      :allowMediaComments       => CanvasKaltura::ClientV3.config && @context.try_rescue(:allow_media_comments?),
+      :kalturaSettings          => CanvasKaltura::ClientV3.config.try(:slice, 'domain', 'resource_domain', 'rtmp_domain', 'partner_id', 'subpartner_id', 'player_ui_conf', 'player_cache_st', 'kcw_ui_conf', 'upload_ui_conf', 'max_file_size_bytes', 'do_analytics', 'use_alt_record_widget', 'hide_rte_button', 'js_uploader'),
       :equellaEnabled           => !!equella_enabled?,
       :googleAnalyticsAccount   => Setting.get('google_analytics_key', nil),
       :http_status              => @status,
@@ -734,11 +745,7 @@ module ApplicationHelper
 
   def get_global_includes
     return @global_includes if defined?(@global_includes)
-    @global_includes = []
-    if @current_user && @current_user.enabled_theme != "default"
-      @global_includes << {:css => "compiled/#{@current_user.enabled_theme}"}
-    end
-    @global_includes << Account.site_admin.global_includes_hash
+    @global_includes = [Account.site_admin.global_includes_hash]
     @global_includes << @domain_root_account.global_includes_hash if @domain_root_account.present?
     if @domain_root_account.try(:sub_account_includes?)
       # get the deepest account to start looking for branding
@@ -873,10 +880,17 @@ module ApplicationHelper
   end
 
   def dashboard_url(opts={})
-    @domain_root_account.settings[:dashboard_url] || super(opts)
+    custom_dashboard_url || super(opts)
   end
 
   def dashboard_path(opts={})
-    @domain_root_account.settings[:dashboard_url] || super(opts)
+    custom_dashboard_url || super(opts)
+  end
+
+  def custom_dashboard_url
+    url = @domain_root_account.settings[:dashboard_url]
+    if url.present?
+      url + "?current_user_id=#{@current_user.id}"
+    end
   end
 end

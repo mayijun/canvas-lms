@@ -1951,7 +1951,7 @@ class Course < ActiveRecord::Base
       # These only need to be processed once
       Attachment.skip_media_object_creation do
         process_migration_files(data, migration); migration.update_import_progress(18)
-        Attachment.process_migration(data, migration); migration.update_import_progress(20)
+        Importers::Attachment.new.process_migration(data, migration); migration.update_import_progress(20)
         mo_attachments = self.imported_migration_items.find_all { |i| i.is_a?(Attachment) && i.media_entry_id.present? }
         begin
           import_media_objects(mo_attachments, migration)
@@ -1978,13 +1978,13 @@ class Course < ActiveRecord::Base
     ContextExternalTool.process_migration(data, migration); migration.update_import_progress(45)
 
     #These need to be ran twice because they can reference each other
-    Quizzes::Quiz.process_migration(data, migration, question_data); migration.update_import_progress(50)
+    Quizzes::QuizImporter.process_migration(data, migration, question_data); migration.update_import_progress(50)
     DiscussionTopic.process_migration(data, migration);migration.update_import_progress(55)
     WikiPage.process_migration(data, migration);migration.update_import_progress(60)
     Assignment.process_migration(data, migration);migration.update_import_progress(65)
 
     # and second time...
-    Quizzes::Quiz.process_migration(data, migration, question_data); migration.update_import_progress(70)
+    Quizzes::QuizImporter.process_migration(data, migration, question_data); migration.update_import_progress(70)
     ContextModule.process_migration(data, migration);migration.update_import_progress(72)
     DiscussionTopic.process_migration(data, migration);migration.update_import_progress(75)
     WikiPage.process_migration(data, migration);migration.update_import_progress(80)
@@ -2084,7 +2084,23 @@ class Course < ActiveRecord::Base
     return unless data[:course]
     settings = data[:course]
     if settings[:tab_configuration] && settings[:tab_configuration].is_a?(Array)
-      self.tab_configuration = settings[:tab_configuration]
+      tab_config = []
+      all_tools = nil
+      settings[:tab_configuration].each do |tab|
+        if tab['id'].is_a?(String) && tab['id'].start_with?('context_external_tool_')
+          tool_mig_id = tab['id'].sub('context_external_tool_', '')
+          all_tools ||= ContextExternalTool.find_all_for(self, :course_navigation)
+          if tool = (all_tools.detect{|t| t.migration_id == tool_mig_id} ||
+              all_tools.detect{|t| CC::CCHelper.create_key(t) == tool_mig_id})
+            # translate the migration_id to a real id
+            tab['id'] = "context_external_tool_#{tool.id}"
+            tab_config << tab
+          end
+        else
+          tab_config << tab
+        end
+      end
+      self.tab_configuration = tab_config
     end
     if settings[:storage_quota] && ( migration.for_course_copy? || self.account.grants_right?(migration.user, nil, :manage_courses))
       self.storage_quota = settings[:storage_quota]

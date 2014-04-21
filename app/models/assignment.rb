@@ -1184,7 +1184,7 @@ class Assignment < ActiveRecord::Base
                             :versions,
                             :quiz_submission)
 
-    too_many = too_many_qs_versions?(submissions)
+    res[:too_many_quiz_submissions] = too_many = too_many_qs_versions?(submissions)
     qs_versions = quiz_submission_versions(submissions, too_many)
 
     res[:submissions] = submissions.map do |sub|
@@ -1760,7 +1760,7 @@ class Assignment < ActiveRecord::Base
     [:turnitin_enabled, :peer_reviews_assigned, :peer_reviews,
      :automatic_peer_reviews, :anonymous_peer_reviews,
      :grade_group_students_individually, :allowed_extensions,
-     :position, :peer_review_count
+     :position, :peer_review_count, :muted
     ].each do |prop|
       item.send("#{prop}=", hash[prop]) unless hash[prop].nil?
     end

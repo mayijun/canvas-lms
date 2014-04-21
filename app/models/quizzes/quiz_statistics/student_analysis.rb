@@ -21,6 +21,10 @@ require 'csv'
 class Quizzes::QuizStatistics::StudentAnalysis < Quizzes::QuizStatistics::Report
   include HtmlTextHelper
 
+  def readable_type
+    t('#quizzes.quiz_statistics.types.student_analysis', 'Student Analysis')
+  end
+
   class TemporaryUser < Struct.new(:id, :short_name)
   end
 
@@ -365,7 +369,7 @@ class Quizzes::QuizStatistics::StudentAnalysis < Quizzes::QuizStatistics::Report
       :user_ids => question[:user_ids] - question[:answers].map { |a| a[:user_ids] }.flatten
     } rescue nil
     question[:answers] << none if none && none[:responses] > 0
-    question
+    question.to_hash.with_indifferent_access
   end
 
 end
