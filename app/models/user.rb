@@ -1837,12 +1837,13 @@ class User < ActiveRecord::Base
     self.shard.activate do
       Shackles.activate(:slave) do
         visible_instances = visible_stream_item_instances(opts).
-            includes(:stream_item).
+            includes(:stream_item => :context).
             limit(Setting.get('recent_stream_item_limit', 100))
         visible_instances.map do |sii|
           si = sii.stream_item
           next unless si.present?
           next if si.asset_type == 'Submission'
+          next if si.context_type == "Course" && si.context.concluded?
           si.data.write_attribute(:unread, sii.unread?)
           si
         end.compact
@@ -2553,18 +2554,13 @@ class User < ActiveRecord::Base
     @all_active_pseudonyms ||= self.pseudonyms.with_each_shard { |scope| scope.active }
   end
 
-  #when screenreader_gradebook is enabled by default, we won't need to pass in context anymore
-  def prefers_gradebook2?(context)
+  # when we turn GB1 off, we can remove context from this function
+  def preferred_gradebook_version(context)
     if context.feature_enabled?(:screenreader_gradebook)
-      return true if preferences[:gradebook_version].nil?
-      preferences[:gradebook_version] == '2'
+      preferences[:gradebook_version] || '2'
     else
-      preferences[:use_gradebook2] != false
+      preferences[:use_gradebook2] == false ? '1' : '2'
     end
-  end
-
-  def gradebook_preference
-    preferences[:gradebook_version]
   end
 
   def stamp_logout_time!

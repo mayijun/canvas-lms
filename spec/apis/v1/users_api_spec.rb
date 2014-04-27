@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - 2013 Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -69,6 +69,8 @@ describe Api::V1::User do
           'sis_import_id' => nil,
           'id' => @user.id,
           'short_name' => 'User',
+          'sis_user_id' => 'xyz',
+          'integration_id' => nil,
           'login_id' => 'xyz',
           'sis_login_id' => 'xyz'
         }
@@ -89,6 +91,8 @@ describe Api::V1::User do
           'sis_import_id' => sis_batch.id,
           'id' => @user.id,
           'short_name' => 'User',
+          'sis_user_id' => 'xyz',
+          'integration_id' => nil,
           'login_id' => 'xyz',
           'sis_login_id' => 'xyz'
         }
@@ -137,7 +141,7 @@ describe Api::V1::User do
 
     def test_context(mock_context, context_to_pass)
       mock_context.expects(:account).returns(mock_context)
-      mock_context.expects(:id).returns(42)
+      mock_context.expects(:global_id).returns(42)
       mock_context.expects(:grants_right?).with(@admin, :manage_students).returns(true)
       if context_to_pass
         @test_api.user_json(@student, @admin, {}, [], context_to_pass)
@@ -148,9 +152,12 @@ describe Api::V1::User do
                       "sis_user_id"=>"sis-user-id",
                       "id"=>@student.id,
                       "short_name"=>"Student",
-                      "login_id"=>"pvuser@example.com",
+                      "sis_user_id"=>"sis-user-id",
+                      "integration_id" => nil,
                       "sis_import_id"=>@student.pseudonym.sis_batch_id,
-                      "sis_login_id"=>"pvuser@example.com"}
+                      "sis_login_id"=>"pvuser@example.com",
+                      "login_id" => "pvuser@example.com"
+      }
     end
 
     it 'should support manually passing the context' do
@@ -168,7 +175,7 @@ describe Api::V1::User do
 
     it 'should support manually passing the current user' do
       @test_api.context = mock()
-      @test_api.context.expects(:id).returns(42)
+      @test_api.context.expects(:global_id).returns(42)
       @test_api.context.expects(:account).returns(@test_api.context)
       @test_api.context.expects(:grants_right?).with(@admin, :manage_students).returns(true)
       @test_api.current_user = @admin
@@ -177,7 +184,7 @@ describe Api::V1::User do
 
     it 'should support loading the current user as a member var' do
       mock_context = mock()
-      mock_context.expects(:id).returns(42)
+      mock_context.expects(:global_id).returns(42)
       mock_context.expects(:account).returns(mock_context)
       mock_context.expects(:grants_right?).with(@admin, :manage_students).returns(true)
       @test_api.current_user = @admin
@@ -328,8 +335,10 @@ describe "Users API", type: :request do
           'sis_import_id' => nil,
           'id' => user.id,
           'short_name' => user.short_name,
-          'login_id' => user.pseudonym.unique_id,
-          'sis_login_id' => user.pseudonym.sis_user_id
+          'sis_user_id' => user.pseudonym.sis_user_id,
+          'integration_id' => nil,
+          'sis_login_id' => user.pseudonym.sis_user_id,
+          'login_id' => user.pseudonym.unique_id
         }]
       end
     end
@@ -458,6 +467,7 @@ describe "Users API", type: :request do
           "sis_import_id" => user.pseudonym.sis_batch_id,
           "login_id"      => "test@example.com",
           "sis_login_id"  => "test@example.com",
+          "integration_id" => nil,
           "locale"        => "en"
         }
       end
@@ -624,6 +634,7 @@ describe "Users API", type: :request do
           'sis_import_id' => nil,
           'id' => user.id,
           'short_name' => 'Tobias',
+          'integration_id' => nil,
           'login_id' => 'student@example.com',
           'sis_login_id' => 'student@example.com',
           'locale' => 'en'

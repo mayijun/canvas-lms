@@ -36,7 +36,7 @@ else
   gem 'rails-patch-json-encode', '0.0.1'
   gem 'rack', '1.4.5'
   gem 'routing_concerns', '0.1.0'
-  gem 'switchman', '1.1.0'
+  gem 'switchman', '1.2.1'
   gem 'folio-pagination', '0.0.7', :require => 'folio/rails'
   gem 'will_paginate', '3.0.4', :require => false
 end
@@ -84,7 +84,8 @@ gem 'netaddr', '1.5.0'
 gem 'nokogiri', '1.5.6'
 # oauth gem, with rails3 fixes rolled in
 gem 'oauth-instructure', '0.4.10', :require => 'oauth'
-gem 'rake', '10.1.1'
+gem 'rack-mini-profiler', '0.9.1', :require => false
+gem 'rake', '10.3.1'
 gem 'rdoc', '3.12'
 gem 'ratom-instructure', '0.6.9', :require => "atom" # custom gem until necessary changes are merged into mainstream
 gem 'rdiscount', '1.6.8'
@@ -102,7 +103,7 @@ gem 'safe_yaml', '0.9.7', :require => false
 gem 'safe_yaml-instructure', '0.8.0', :require => false
   gem 'hashie', '2.0.5'
 gem 'sanitize', '2.0.3'
-gem 'shackles', '1.0.3'
+gem 'shackles', '1.0.5'
 
 gem 'tzinfo', '0.3.35'
 gem 'useragent', '0.4.16'
@@ -119,6 +120,7 @@ gem 'bookmarked_collection', :path => 'gems/bookmarked_collection'
 gem 'canvas_breach_mitigation', :path => 'gems/canvas_breach_mitigation'
 gem 'canvas_color', :path => 'gems/canvas_color'
 gem 'canvas_crummy', :path => 'gems/canvas_crummy'
+gem 'canvas_ext', :path => 'gems/canvas_ext'
 gem 'canvas_http', :path => 'gems/canvas_http'
 gem 'canvas_kaltura', :path => 'gems/canvas_kaltura'
 gem 'canvas_mimetype_fu', :path => 'gems/canvas_mimetype_fu'
@@ -128,8 +130,11 @@ gem 'canvas_statsd', :path => 'gems/canvas_statsd'
 gem 'canvas_stringex', :path => 'gems/canvas_stringex'
 gem 'canvas_time', :path => 'gems/canvas_time'
 gem 'canvas_uuid', :path => 'gems/canvas_uuid'
+gem 'google_docs', :path => 'gems/google_docs'
 gem 'html_text_helper', :path => 'gems/html_text_helper'
+gem 'incoming_mail_processor', :path => 'gems/incoming_mail_processor'
 gem 'json_token', :path => 'gems/json_token'
+gem 'linked_in', :path => 'gems/linked_in'
 gem 'lti_outbound', :path => 'gems/lti_outbound'
 gem 'multipart', :path => 'gems/multipart'
 gem 'paginated_collection', :path => 'gems/paginated_collection'

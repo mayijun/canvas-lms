@@ -60,7 +60,7 @@ describe Quizzes::QuizzesController do
     @quiz_submission = @quiz.generate_submission(user)
     @quiz_submission.mark_completed
     @quiz_submission.submission_data = yield if block_given?
-    @quiz_submission.grade_submission
+    Quizzes::SubmissionGrader.new(@quiz_submission).grade_submission
     @quiz_submission.save!
   end
 
@@ -601,7 +601,7 @@ describe Quizzes::QuizzesController do
       course_quiz(true)
       @quiz.locked = true
       @quiz.save!
-      @sub = @quiz.find_or_create_submission(@user, nil, 'settings_only')
+      @sub = Quizzes::SubmissionManager.new(@quiz).find_or_create_submission(@user, nil, 'settings_only')
       @sub.manually_unlocked = true
       @sub.save!
       post 'show', :course_id => @course, :quiz_id => @quiz.id, :take => '1'
@@ -625,7 +625,7 @@ describe Quizzes::QuizzesController do
       course_quiz(true)
       @quiz.time_limit = 60
       @quiz.save!
-      @sub = @quiz.find_or_create_submission(@user, nil, 'settings_only')
+      @sub = Quizzes::SubmissionManager.new(@quiz).find_or_create_submission(@user, nil, 'settings_only')
       @sub.extra_time = 30
       @sub.save!
       post 'show', :course_id => @course, :quiz_id => @quiz.id, :take => '1'
@@ -1117,11 +1117,11 @@ describe Quizzes::QuizzesController do
         #non logged_out submissions
         @user1 = user_with_pseudonym(:active_all => true, :name => 'Student1', :username => 'student1@instructure.com')
         @quiz_submission1 = @quiz.generate_submission(@user1)
-        @quiz_submission1.grade_submission
+        Quizzes::SubmissionGrader.new(@quiz_submission1).grade_submission
 
         @user2 = user_with_pseudonym(:active_all => true, :name => 'Student2', :username => 'student2@instructure.com')
         @quiz_submission2 = @quiz.generate_submission(@user2)
-        @quiz_submission2.grade_submission
+        Quizzes::SubmissionGrader.new(@quiz_submission2).grade_submission
 
         @course.large_roster = false
         @course.save!

@@ -412,6 +412,7 @@ class Quizzes::Quiz < ActiveRecord::Base
         if context.feature_enabled?(:draft_state) && !deleted?
           a.workflow_state = self.published? ? 'published' : 'unpublished'
         end
+        @notify_of_update ||= a.workflow_state_changed? && a.published?
         a.notify_of_update = @notify_of_update
         a.with_versioning(false) do
           @notify_of_update ? a.save : a.save_without_broadcasting!
@@ -632,33 +633,10 @@ class Quizzes::Quiz < ActiveRecord::Base
     q
   end
 
-  def find_or_create_submission(user, temporary=false, state=nil)
-    s = nil
-    state ||= 'untaken'
-    shard.activate do
-      Quizzes::QuizSubmission.unique_constraint_retry do
-        if temporary || !user.is_a?(::User)
-          user_code = "#{user.to_s}"
-          user_code = "user_#{user.id}" if user.is_a?(::User)
-          s = quiz_submissions.where(temporary_user_code: user_code).first
-          s ||= quiz_submissions.build(temporary_user_code: user_code)
-          s.workflow_state ||= state
-          s.save! if s.changed?
-        else
-          s = quiz_submissions.where(user_id: user).first
-          s ||= quiz_submissions.build(user: user)
-          s.workflow_state ||= state
-          s.save! if s.changed?
-        end
-      end
-    end
-    s
-  end
-
   # Generates a submission for the specified user on this quiz, based
   # on the SAVED version of the quiz.  Does not consider permissions.
   def generate_submission(user, preview=false)
-    submission = self.find_or_create_submission(user, preview)
+    submission = Quizzes::SubmissionManager.new(self).find_or_create_submission(user, preview)
     submission.retake
     submission.attempt = (submission.attempt + 1) rescue 1
     user_questions = []

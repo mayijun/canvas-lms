@@ -211,6 +211,17 @@ class FilesController < ApplicationController
   # @argument search_term [Optional, String]
   #   The partial name of the files to match and return.
   #
+  # @argument include[] [Optional, "user"]
+  #   Array of additional information to include.
+  #
+  #   "user":: the user who uploaded the file or last edited its content
+  #
+  # @argument sort [Optional, String, "name"|"size"|"created_at"|"updated_at"|"content_type"|"user"]
+  #   Sort results by this field. Defaults to 'name'. Note that `sort=user` implies `include[]=user`.
+  #
+  # @argument order [Optional, String, "asc"|"desc"]
+  #   The sorting order. Defaults to 'asc'.
+  #
   # @example_request
   #
   #   curl 'https://<canvas>/api/v1/folders/<folder_id>/files?content_types[]=image&content_types[]=text/plain \
@@ -231,6 +242,9 @@ class FilesController < ApplicationController
     if authorized_action(folder, @current_user, :read_contents)
       @context = folder.context unless context_index
       can_manage_files = @context.grants_right?(@current_user, session, :manage_files)
+      params[:sort] ||= params[:sort_by] # :sort_by was undocumented; :sort is more consistent with other APIs such as wikis
+      params[:include] = Array(params[:include])
+      params[:include] << 'user' if params[:sort] == 'user'
 
       if context_index
         if can_manage_files
@@ -246,12 +260,28 @@ class FilesController < ApplicationController
           scope = folder.visible_file_attachments.not_hidden.not_locked
         end
       end
+      scope = scope.includes(:user) if params[:include].include? 'user' && params[:sort] != 'user'
       scope = Attachment.search_by_attribute(scope, :display_name, params[:search_term])
-      if params[:sort_by] == 'position'
-        scope = scope.by_position_then_display_name
-      else
-        scope = scope.by_display_name
+
+      order_clause = case params[:sort]
+        when 'position' # undocumented; kept for compatibility
+          "attachments.position, #{Attachment.display_name_order_by_clause('attachments')}"
+        when 'size'
+          "attachments.size"
+        when 'created_at'
+          "attachments.created_at"
+        when 'updated_at'
+          "attachments.updated_at"
+        when 'content_type'
+          "attachments.content_type"
+        when 'user'
+          scope = scope.joins("LEFT OUTER JOIN users ON attachments.user_id=users.id")
+          "users.sortable_name IS NULL, #{User.sortable_name_order_by_clause('users')}"
+        else
+          Attachment.display_name_order_by_clause('attachments')
       end
+      order_clause += ' DESC' if params[:order] == 'desc'
+      scope = scope.order(order_clause)
 
       if params[:content_types].present?
         scope = scope.by_content_types(Array(params[:content_types]))
@@ -259,7 +289,7 @@ class FilesController < ApplicationController
 
       url = context_index ? context_files_url : api_v1_list_files_url(folder)
       @files = Api.paginate(scope, self, url)
-      render :json => attachments_json(@files, @current_user, {}, :can_manage_files => can_manage_files)
+      render :json => attachments_json(@files, @current_user, {}, :can_manage_files => can_manage_files, :include => params[:include])
     end
   end
 
@@ -356,6 +386,10 @@ class FilesController < ApplicationController
   # @API Get file
   # Returns the standard attachment json object
   #
+  # @argument include[] [Optional, "user"]
+  #   Array of additional information to include.
+  #
+  #   "user":: the user who uploaded the file or last edited its content
   #
   # @example_request
   #
@@ -366,8 +400,9 @@ class FilesController < ApplicationController
   def api_show
     @attachment = Attachment.find(params[:id])
     raise ActiveRecord::RecordNotFound if @attachment.deleted?
+    params[:include] = Array(params[:include])
     if authorized_action(@attachment,@current_user,:read)
-      render :json => attachment_json(@attachment, @current_user)
+      render :json => attachment_json(@attachment, @current_user, {}, { include: params[:include] })
     end
   end
 
@@ -831,6 +866,7 @@ class FilesController < ApplicationController
         # Need to be careful on this one... we can't let students turn in a
         # file and then edit it after the fact...
         params[:attachment].delete(:uploaded_data) if @context.is_a?(User)
+        @attachment.user = @current_user if params[:attachment][:uploaded_data].present?
         @attachment.attributes = params[:attachment]
         if just_hide == '1'
           @attachment.locked = false

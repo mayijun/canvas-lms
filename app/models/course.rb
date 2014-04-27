@@ -61,6 +61,7 @@ class Course < ActiveRecord::Base
                   :grading_standard,
                   :grading_standard_enabled,
                   :locale,
+                  :integration_id,
                   :hide_final_grades,
                   :hide_distribution_graphs,
                   :lock_all_announcements,
@@ -1159,6 +1160,10 @@ class Course < ActiveRecord::Base
     self.restrict_enrollments_to_course_dates = true
   end
 
+  def concluded?
+    completed? || soft_concluded?
+  end
+
   def state_sortable
     case state
     when :invited
@@ -1962,7 +1967,7 @@ class Course < ActiveRecord::Base
       end
       if migration.canvas_import?
         migration.update_import_progress(30)
-        MigrationImport::MediaTrack.process_migration(data[:media_tracks], migration)
+        Importers::MediaTrack.process_migration(data[:media_tracks], migration)
       end
     end
 
@@ -2244,7 +2249,8 @@ class Course < ActiveRecord::Base
       :allow_student_wiki_edits, :show_public_context_messages,
       :syllabus_body, :allow_student_forum_attachments,
       :default_wiki_editing_roles, :allow_student_organized_groups,
-      :default_view, :show_total_grade_as_points, :show_all_discussion_entries, :open_enrollment,
+      :default_view, :show_total_grade_as_points,
+      :show_all_discussion_entries, :open_enrollment,
       :storage_quota, :tab_configuration, :allow_wiki_comments,
       :turnitin_comments, :self_enrollment, :license, :indexed, :locale,
       :hide_final_grade, :hide_distribution_graphs,

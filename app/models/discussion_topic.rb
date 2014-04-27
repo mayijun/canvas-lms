@@ -591,7 +591,7 @@ class DiscussionTopic < ActiveRecord::Base
   end
 
   def reply_from(opts)
-    raise IncomingMail::IncomingMessageProcessor::UnknownAddressError if self.context.root_account.deleted?
+    raise IncomingMail::Errors::UnknownAddress if self.context.root_account.deleted?
     user = opts[:user]
     if opts[:html]
       message = opts[:html].strip
@@ -613,7 +613,7 @@ class DiscussionTopic < ActiveRecord::Base
         :user => user,
       })
       if !entry.grants_right?(user, :create)
-        raise IncomingMail::IncomingMessageProcessor::ReplyToLockedTopicError
+        raise IncomingMail::Errors::ReplyToLockedTopic
       else
         entry.save!
         entry
@@ -950,7 +950,10 @@ class DiscussionTopic < ActiveRecord::Base
   end
 
   def self.import_from_migration(hash, context, item=nil)
-    importer = MigrationImport::DiscussionTopic.new(hash, context, item)
+    # TODO: access Importers::DiscussionTopic directly
+    # this class method will eventually go away. leaving now
+    # for edge cases that may be using it.
+    importer = Importers::DiscussionTopic.new(hash, context, item)
     importer.run
   end
 

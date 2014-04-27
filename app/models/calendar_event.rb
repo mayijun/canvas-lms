@@ -280,8 +280,8 @@ class CalendarEvent < ActiveRecord::Base
 
     if events.present?
       CalendarEvent.where(:id => self).
-          update_all(:start_at => events.map(&:start_at).min,
-                     :end_at => events.map(&:end_at).max)
+          update_all(:start_at => events.map(&:start_at).compact.min,
+                     :end_at => events.map(&:end_at).compact.max)
       reload
     end
   end
@@ -300,7 +300,7 @@ class CalendarEvent < ActiveRecord::Base
       self.workflow_state = 'deleted'
       self.deleted_at = Time.now.utc
       save!
-      child_events.each do |e|
+      child_events.find_each do |e|
         e.cancel_reason = cancel_reason
         e.updating_user = updating_user
         e.destroy(false)
@@ -451,7 +451,11 @@ class CalendarEvent < ActiveRecord::Base
   end
 
   def child_events_for(participant)
-    child_events.select{ |e| e.has_asset?(participant) }
+    if child_events.loaded?
+      child_events.select { |e| e.has_asset?(participant) }
+    else
+      child_events.where(context_type: participant.class.name, context_id: participant)
+    end
   end
 
   def participants_per_appointment
@@ -520,7 +524,7 @@ class CalendarEvent < ActiveRecord::Base
     item ||= find_by_context_type_and_context_id_and_id(context.class.to_s, context.id, hash[:id])
     item ||= find_by_context_type_and_context_id_and_migration_id(context.class.to_s, context.id, hash[:migration_id]) if hash[:migration_id]
     item ||= context.calendar_events.new
-    MigrationImport::CalendarEvent.import_from_migration(hash, context, item)
+    Importers::CalendarEvent.import_from_migration(hash, context, item)
   end
 
   def self.max_visible_calendars

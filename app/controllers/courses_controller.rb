@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - 2013 Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -84,6 +84,10 @@ require 'set'
 #         },
 #         "sis_course_id": {
 #           "description": "the SIS identifier for the course, if defined",
+#           "type": "string"
+#         },
+#         "integration_id": {
+#           "description": "the integration identifier for the course, if defined",
 #           "type": "string"
 #         },
 #         "name": {
@@ -230,6 +234,19 @@ require 'set'
 #           "example": false,
 #           "type": "boolean"
 #         }
+#       }
+#     }
+#
+# @model CalendarLink
+#     {
+#       "id": "CalendarLink",
+#       "description": "",
+#       "properties": {
+#         "ics": {
+#           "description": "The URL of the calendar in ICS format",
+#           "example": "https://canvas.instructure.com/feeds/calendars/course_abcdef.ics",
+#           "type": "string"
+#          }
 #       }
 #     }
 #
@@ -412,6 +429,9 @@ class CoursesController < ApplicationController
   #
   # @argument course[sis_course_id] [Optional, String]
   #   The unique SIS identifier.
+  #
+  # @argument course[integration_id] [Optional, String]
+  #   The unique Integration identifier.
   #
   # @argument course[hide_final_grades] [Optional, Boolean]
   #   If this option is set to true, the totals in student grades summary will
@@ -1466,7 +1486,7 @@ class CoursesController < ApplicationController
                           :root_account => @context.root_account,
                           :search_method => @context.user_list_search_mode_for(@current_user),
                           :initial_type => params[:enrollment_type])
-      if !(@context.completed? || @context.soft_concluded?) && (@enrollments = EnrollmentsFromUserList.process(list, @context, enrollment_options))
+      if !@context.concluded? && (@enrollments = EnrollmentsFromUserList.process(list, @context, enrollment_options))
         Enrollment.send(:preload_associations, @enrollments, [:course_section, {:user => [:communication_channel, :pseudonym]}])
         json = @enrollments.map { |e|
           { 'enrollment' =>
@@ -1539,8 +1559,8 @@ class CoursesController < ApplicationController
       authorized_action(@context, @current_user, :read_as_admin) &&
       authorized_action(@domain_root_account.manually_created_courses_account, @current_user, [:create_courses, :manage_courses])
     # For prepopulating the date fields
-    js_env(:OLD_START_DATE => datetime_string(@context.start_at, :verbose, nil, true))
-    js_env(:OLD_END_DATE => datetime_string(@context.conclude_at, :verbose, nil, true))
+    js_env(:OLD_START_DATE => unlocalized_datetime_string(@context.start_at, :verbose))
+    js_env(:OLD_END_DATE => unlocalized_datetime_string(@context.conclude_at, :verbose))
   end
 
   def copy_course
