@@ -1147,7 +1147,6 @@ describe AssignmentsApiController, type: :request do
         )
         @assignment.reload
         @assignment.grading_standard.should == @account_standard
-        @assignment.grading_type.should == 'letter_grade'
       end
 
       it "allows setting a course level grading standard" do
@@ -1165,7 +1164,6 @@ describe AssignmentsApiController, type: :request do
         )
         @assignment.reload
         @assignment.grading_standard.should == @course_standard
-        @assignment.grading_type.should == 'letter_grade'
       end
 
       it "should update a sub account level grading standard" do
@@ -1188,7 +1186,6 @@ describe AssignmentsApiController, type: :request do
         )
         assignment2.reload
         assignment2.grading_standard.should == sub_account_standard
-        assignment2.grading_type.should == 'letter_grade'
       end
 
       it "should not update grading standard from sub account not on account chain" do
@@ -1409,7 +1406,7 @@ describe AssignmentsApiController, type: :request do
                    :format => 'json',
                    :course_id => @course.id.to_s
                  })
-        mod.evaluate_for(@user, true).should be_unlocked
+        mod.evaluate_for(@user).should be_unlocked
 
         # show should count as a view
         json = api_get_assignment_in_course(@assignment,@course)
@@ -1482,7 +1479,7 @@ describe AssignmentsApiController, type: :request do
         mod.save!
         json = api_get_assignment_in_course(@assignment,@course)
         json['description'].should be_nil
-        mod.evaluate_for(@user, true).should be_unlocked
+        mod.evaluate_for(@user).should be_unlocked
       end
 
       it "includes submission info when requested with include flag" do

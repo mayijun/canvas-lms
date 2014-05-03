@@ -93,7 +93,16 @@ class Account < ActiveRecord::Base
   
   serialize :settings, Hash
   include TimeZoneHelper
+
   time_zone_attribute :default_time_zone, default: "America/Denver"
+  def default_time_zone_with_root_account
+    if read_attribute(:default_time_zone) || root_account?
+      default_time_zone_without_root_account
+    else
+      root_account.default_time_zone
+    end
+  end
+  alias_method_chain :default_time_zone, :root_account
 
   validates_locale :default_locale, :allow_nil => true
   validates_length_of :name, :maximum => maximum_string_length, :allow_blank => true
@@ -1347,15 +1356,11 @@ class Account < ActiveRecord::Base
   end
 
   def import_from_migration(data, params, migration)
-
-    LearningOutcome.process_migration(data, migration)
-
-    migration.progress=100
-    migration.workflow_state = :imported
-    migration.save
+    Importers::AccountContentImporter.import_content(self, data, params, migration)
   end
 
   def enable_fabulous_quizzes!
+    root_account.enable_feature! :draft_state
     change_root_account_setting!(:enable_fabulous_quizzes, true)
   end
 

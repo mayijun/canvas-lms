@@ -965,7 +965,7 @@ class UsersController < ApplicationController
       cc_type = params[:communication_channel][:type] || CommunicationChannel::TYPE_EMAIL
       cc_addr = params[:communication_channel][:address]
       skip_confirmation = value_to_boolean(params[:communication_channel][:skip_confirmation]) &&
-          (Account.site_admin.grants_right?(@current_user, :manage_students) || Account.default.grants_right?(@current_user, :manage_students))
+          (Account.site_admin.grants_right?(@current_user, :manage_students) || @context.grants_right?(@current_user, :manage_students))
     else
       cc_type = CommunicationChannel::TYPE_EMAIL
       cc_addr = params[:pseudonym].delete(:path) || params[:pseudonym][:unique_id]
@@ -978,6 +978,12 @@ class UsersController < ApplicationController
     @user ||= User.new
     if params[:user]
       params[:user].delete(:self_enrollment_code) unless self_enrollment
+      if params[:user][:birthdate].present? && params[:user][:birthdate] !~ Api::ISO8601_REGEX &&
+          params[:user][:birthdate] !~ Api::DATE_REGEX
+        return render(:json => {:errors => {:birthdate => t(:birthdate_invalid,
+          'Invalid date or invalid datetime for birthdate')}}, :status => 400)
+      end
+
       @user.attributes = params[:user]
     end
     @user.name ||= params[:pseudonym][:unique_id]
@@ -998,7 +1004,7 @@ class UsersController < ApplicationController
       @user.require_self_enrollment_code = self_enrollment
       @user.validation_root_account = @domain_root_account
     end
-    
+
     @observee = nil
     if @user.initial_enrollment_type == 'observer'
       # TODO: SAML/CAS support
@@ -1089,7 +1095,7 @@ class UsersController < ApplicationController
   # @example_request
   #
   #   curl 'https://<canvas>/api/v1/users/<user_id>/settings \
-  #     -X PUT \ 
+  #     -X PUT \
   #     -F 'manual_mark_as_read=true'
   #     -H 'Authorization: Bearer <token>'
   def settings
@@ -1155,11 +1161,11 @@ class UsersController < ApplicationController
   # @example_request
   #
   #   curl 'https://<canvas>/api/v1/users/133.json' \
-  #        -X PUT \ 
-  #        -F 'user[name]=Sheldon Cooper' \ 
-  #        -F 'user[short_name]=Shelly' \ 
-  #        -F 'user[time_zone]=Pacific Time (US & Canada)' \ 
-  #        -F 'user[avatar][token]=<opaque_token>' \ 
+  #        -X PUT \
+  #        -F 'user[name]=Sheldon Cooper' \
+  #        -F 'user[short_name]=Shelly' \
+  #        -F 'user[time_zone]=Pacific Time (US & Canada)' \
+  #        -F 'user[avatar][token]=<opaque_token>' \
   #        -H "Authorization: Bearer <token>"
   #
   # @returns User
@@ -1175,7 +1181,7 @@ class UsersController < ApplicationController
     end
 
     managed_attributes = []
-    managed_attributes.concat [:name, :short_name, :sortable_name] if @user.grants_right?(@current_user, nil, :rename)
+    managed_attributes.concat [:name, :short_name, :sortable_name, :birthdate] if @user.grants_right?(@current_user, nil, :rename)
     managed_attributes << :terms_of_use if @user == (@real_current_user || @current_user)
     if @user.grants_right?(@current_user, nil, :manage_user_details)
       managed_attributes.concat([:time_zone, :locale])
@@ -1216,6 +1222,12 @@ class UsersController < ApplicationController
         @user.require_acceptance_of_terms = true
       end
 
+      if user_params[:birthdate].present? && user_params[:birthdate] !~ Api::ISO8601_REGEX &&
+          params[:user][:birthdate] !~ Api::DATE_REGEX
+        return render(:json => {:errors => {:birthdate => t(:birthdate_invalid,
+          'Invalid date or invalid datetime for birthdate')}}, :status => 400)
+      end
+
       respond_to do |format|
         if @user.update_attributes(user_params)
           if admin_avatar_update
@@ -1239,8 +1251,12 @@ class UsersController < ApplicationController
   end
 
   def media_download
-    asset = CanvasKaltura::ClientV3.new.media_sources(params[:entryId]).find{|a| a[:fileExt] == params[:type] }
-    url = asset && asset[:url]
+    fetcher = MediaSourceFetcher.new(CanvasKaltura::ClientV3.new)
+    url = fetcher.fetch_preferred_source_url(
+       media_id: params[:entryId],
+       file_extension: params[:type],
+       media_type: params[:media_type]
+    )
     if url
       if params[:redirect] == '1'
         redirect_to url
@@ -1373,8 +1389,8 @@ class UsersController < ApplicationController
   # you won't be able to make API calls or log into Canvas.
   #
   # @example_request
-  #     curl https://<canvas>/api/v1/users/5 \ 
-  #       -H 'Authorization: Bearer <ACCESS_TOKEN>' \ 
+  #     curl https://<canvas>/api/v1/users/5 \
+  #       -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   #       -X DELETE
   #
   # @returns User
@@ -1475,7 +1491,7 @@ class UsersController < ApplicationController
         student = User.find(params[:student_id])
         enrollments = student.student_enrollments.active.includes(:course).all
         enrollments.each do |enrollment|
-          should_include = enrollment.course.user_has_been_instructor?(@teacher) && 
+          should_include = enrollment.course.user_has_been_instructor?(@teacher) &&
                            enrollment.course.enrollments_visible_to(@teacher, :include_priors => true).find_by_id(enrollment.id) &&
                            enrollment.course.grants_right?(@current_user, :read_reports)
           if should_include
