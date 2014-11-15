@@ -24,6 +24,7 @@ class Feature
     @state = 'allowed'
     opts.each do |key, val|
       next unless ATTRS.include?(key)
+      val = (Feature.production_environment? ? 'hidden' : 'allowed') if key == :state && val == 'hidden_in_prod'
       next if key == :state && !%w(hidden off allowed on).include?(val)
       instance_variable_set "@#{key}", val
     end
@@ -51,6 +52,10 @@ class Feature
     @state == 'hidden'
   end
 
+  def self.production_environment?
+    Rails.env.production? && !(ApplicationController.respond_to?(:test_cluster?) && ApplicationController.test_cluster?)
+  end
+
   # Register one or more features.  Must be done during application initialization.
   # The feature_hash is as follows:
 =begin
@@ -63,7 +68,7 @@ class Feature
                           # will be inherited in "off" state by root accounts
     enable_at: Date.new(2014, 1, 1),  # estimated release date shown in UI
     beta: false,          # 'beta' tag shown in UI
-    development: false,   # 'development' tag shown in UI
+    development: false,   # whether the feature is restricted to development / test / beta instances
     release_notes_url: 'http://example.com/',
 
     # optional: you can supply a Proc to attach warning messages to and/or forbid certain transitions
@@ -83,9 +88,10 @@ class Feature
 
   def self.register(feature_hash)
     @features ||= {}
-    feature_hash.each do |k, v|
-      feature = k.to_s
-      @features[feature] = Feature.new({feature: feature}.merge(v))
+    feature_hash.each do |feature_name, attrs|
+      next if attrs[:development] && production_environment?
+      feature = feature_name.to_s
+      @features[feature] = Feature.new({feature: feature}.merge(attrs))
     end
   end
 
@@ -116,8 +122,7 @@ END
       applies_to: 'RootAccount',
       state: 'hidden',
       root_opt_in: true,
-      beta: true,
-      development: true
+      beta: true
     },
     'html5_first_videos' =>
     {
@@ -128,20 +133,18 @@ then fall back to Flash.
 END
       applies_to: 'RootAccount',
       state: 'allowed',
-      beta: true,
-      development: true
+      beta: true
     },
     'high_contrast' =>
     {
       display_name: -> { I18n.t('features.high_contrast', 'Use High Contrast Styles') },
       description: -> { I18n.t('high_contrast_description', <<-END) },
 If you would prefer a higher-contrast version of the Canvas user interface, enable this.
-This might be useful for people with impaired vision or dificulty reading.
+This might be useful for people with impaired vision or difficulty reading.
 END
       applies_to: 'User',
       state: 'allowed',
-      beta: true,
-      development: true
+      beta: true
     },
     'outcome_gradebook' =>
     {
@@ -154,8 +157,7 @@ mastery/remedial.
 END
       applies_to: 'Course',
       state: 'allowed',
-      root_opt_in: false,
-      development: false
+      root_opt_in: false
     },
     'student_outcome_gradebook' =>
     {
@@ -168,34 +170,20 @@ mastery/remedial.
 END
       applies_to: 'Course',
       state: 'allowed',
-      root_opt_in: false,
-      development: false
+      root_opt_in: false
     },
-  'post_grades' =>
-      {
-          display_name: -> { I18n.t('features.post_grades', 'Post Grades to SIS') },
-          description:  -> { I18n.t('post_grades_description', <<-END) },
+    'post_grades' =>
+    {
+      display_name: -> { I18n.t('features.post_grades', 'Post Grades to SIS') },
+      description:  -> { I18n.t('post_grades_description', <<-END) },
 Post Grades allows teachers to post grades back to enabled SIS systems: Powerschool,
 Aspire (SIS2000), JMC, and any other SIF-enabled SIS that accepts the SIF elements GradingCategory,
- GradingAssignment, GradingAssignmentScore.
-          END
-          applies_to: 'Course',
-          state: 'hidden',
-          root_opt_in: true,
-          development: true
-      },
-    'differentiated_assignments' =>
-    {
-      display_name: -> { I18n.t('features.differentiated_assignments', 'Differentiated Assignments') },
-      description:  -> { I18n.t('differentiated_assignments_description', <<-END) },
-Differentiated Assignments is a *beta* feature that enables choosing which section(s) an assignment applies to.
-Sections that are not given an assignment will not see it in their course content and their final grade will be
-calculated without those points.
+GradingAssignment, GradingAssignmentScore.
 END
       applies_to: 'Course',
       state: 'hidden',
       root_opt_in: true,
-      development: true
+      beta: true
     },
     'k12' =>
     {
@@ -207,8 +195,7 @@ END
       applies_to: 'RootAccount',
       state: 'hidden',
       root_opt_in: true,
-      beta: true,
-      development: true
+      beta: true
     },
     'quiz_moderate' =>
     {
@@ -218,7 +205,7 @@ When Draft State and Quiz Statistics is allowed/on, this enables the new quiz mo
 END
       applies_to: 'Course',
       state: 'hidden',
-      development: true
+      beta: true
     },
     'student_groups_next' =>
     {
@@ -230,7 +217,7 @@ END
       applies_to: 'RootAccount',
       state: 'allowed',
       root_opt_in: true,
-      development: true
+      beta: true
     },
     'better_file_browsing' =>
     {
@@ -242,8 +229,8 @@ goes to the personal files page for a user ('/files') then you need to turn it o
 END
 
       applies_to: 'Course',
-      state: 'hidden',
-      development: true
+      state: 'hidden_in_prod',
+      beta: true
     },
     'modules_next' =>
     {
@@ -273,7 +260,7 @@ Allow users to view and use external tools configured for LOR.
 END
       applies_to: 'User',
       state: 'hidden',
-      development: true
+      beta: true
     },
     'lor_for_account' =>
     {
@@ -283,8 +270,28 @@ Allow users to view and use external tools configured for LOR.
 END
       applies_to: 'RootAccount',
       state: 'hidden',
+      beta: true
+    },
+    'quiz_stats' =>
+    {
+      display_name: -> { I18n.t('features.new_quiz_statistics', 'New Quiz Statistics Page') },
+      description: -> { I18n.t('new_quiz_statistics_desc', <<-END) },
+Enable the new quiz statistics page for an account.
+END
+      applies_to: 'Course',
+      state: 'allowed',
       development: true
     },
+    'multiple_grading_periods' =>
+    {
+      display_name: -> { I18n.t('features.multiple_grading_periods', 'Multiple Grading Periods') },
+      description: -> { I18n.t('enable_multiple_grading_periods', <<-END) },
+Enable multiple grading periods management in the account admin, and use in the Gradebook.
+END
+      applies_to: 'RootAccount',
+      state: 'allowed',
+      development: true
+    }
   )
 
   def self.definitions
@@ -355,5 +362,5 @@ END
 end
 
 # load feature definitions
-Dir.glob("#{Rails.root}/lib/features/*.rb").each { |file| require file }
+Dir.glob("#{Rails.root}/lib/features/*.rb").each { |file| require_dependency file }
 

@@ -27,6 +27,8 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
   attr_accessible :quiz, :user, :temporary_user_code, :submission_data, :score_before_regrade, :has_seen_results
   attr_readonly :quiz_id, :user_id
 
+  GRACEFUL_FINISHED_AT_DRIFT_PERIOD = 5.minutes
+
   EXPORTABLE_ATTRIBUTES = [
     :id, :quiz_id, :quiz_version, :user_id, :submission_data, :submission_id, :score, :kept_score, :quiz_data, :started_at, :end_at, :finished_at, :attempt, :workflow_state,
     :created_at, :updated_at, :fudge_points, :quiz_points_possible, :extra_attempts, :temporary_user_code, :extra_time, :manually_unlocked, :manually_scored, :score_before_regrade, :was_preview,
@@ -46,6 +48,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     allow_nil: true
 
   before_validation :update_quiz_points_possible
+  before_validation :rectify_finished_at_drift, :if => :end_at?
   belongs_to :quiz, class_name: 'Quizzes::Quiz'
   belongs_to :user
   belongs_to :submission, :touch => true
@@ -57,12 +60,19 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
   before_create :assign_validation_token
 
   has_many :attachments, :as => :context, :dependent => :destroy
+  has_many :events, class_name: 'Quizzes::QuizSubmissionEvent', dependent: :destroy
 
   # update the QuizSubmission's Submission to 'graded' when the QuizSubmission is marked as 'complete.' this
   # ensures that quiz submissions with essay questions don't show as graded in the SpeedGrader until the instructor
   # has graded the essays.
-  trigger.after(:update).where("NEW.submission_id IS NOT NULL AND OLD.workflow_state <> NEW.workflow_state AND NEW.workflow_state = 'complete'") do
-    "UPDATE submissions SET workflow_state = 'graded' WHERE id = NEW.submission_id"
+  after_update :grade_submission!, if: :just_completed?
+
+  def just_completed?
+    submission_id? && workflow_state_changed? && completed?
+  end
+
+  def grade_submission!
+    submission.update_attribute(:workflow_state, "graded")
   end
 
   serialize :quiz_data
@@ -98,7 +108,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     can :read
 
     given { |user| user &&
-            self.quiz.context.observer_enrollments.find_by_user_id_and_associated_user_id_and_workflow_state(user.id, self.user_id, 'active') }
+            self.quiz.context.observer_enrollments.where(user_id: user, associated_user_id: self.user_id, workflow_state: 'active').exists? }
     can :read
 
     given {|user, session| quiz.context.grants_right?(user, session, :manage_grades) }
@@ -218,6 +228,20 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     end
   end
 
+  def self.needs_grading
+     resp = where("(
+         quiz_submissions.workflow_state = 'untaken'
+         AND quiz_submissions.end_at < :time
+       ) OR
+       (
+         quiz_submissions.workflow_state = 'completed'
+         AND quiz_submissions.submission_data IS NOT NULL
+       )", {time: Time.now})
+     resp.select! { |qs| qs.needs_grading? }
+     resp
+   end
+
+  # There is also a needs_grading scope which needs to replicate this logic
   def needs_grading?(strict=false)
     if strict && self.untaken? && self.overdue?(true)
       true
@@ -316,6 +340,31 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
 
   def update_quiz_points_possible
     self.quiz_points_possible = self.quiz && self.quiz.points_possible
+  end
+
+  # This callback attempts to handle a somewhat edge-case reported in CNVS-8463
+  # where the quiz auto-submits while the browser tab is inactive, but that
+  # time at which the submission is turned in may have happened *after* the
+  # timer had elapsed (and is never consistent).. When that happened,
+  # admins/teachers were confused that those students had gained extra time when
+  # in fact they didn't, it's just that the JS stalled with submitting at the
+  # right time.
+  #
+  # This will reduce such "drift" only if it appears to be incidental by testing
+  # if it happened within a relatively small window of time; the reason for that
+  # is that if #finished_at was set to something like 5 hours after time-out
+  # then there may be something more sinister going on and we don't want the
+  # callback to shadow it.
+  #
+  # Of course, this is purely guess-work and is not bullet-proof.
+  def rectify_finished_at_drift
+    if self.finished_at && self.end_at && self.finished_at > self.end_at
+      drift = self.finished_at - self.end_at
+
+      if drift <= GRACEFUL_FINISHED_AT_DRIFT_PERIOD
+        self.finished_at = self.end_at
+      end
+    end
   end
 
   def update_kept_score
@@ -521,6 +570,10 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     self.mark_completed
     Quizzes::SubmissionGrader.new(self).grade_submission
     self
+  end
+
+  def graded?
+    self.submission_data.is_a?(Array)
   end
 
   # Updates a simply_versioned version instance in-place.  We want
@@ -743,7 +796,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     # so we simply test its workflow state.
     #
     # Also, we can't use QuizSubmission#overdue? because as of 10/2013 it adds
-    # a graceful period of 1 minute after the true end date of the submission,
+    # a graceful period of 1 (or 5) minute(s) after the true end date of the submission,
     # which doesn't work for us here.
     if self.untaken?
       Quizzes::SubmissionGrader.new(self).grade_submission(:finished_at => self.end_at)
@@ -776,5 +829,16 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     attempts_left = self.attempts_left || 0
 
     self.completed? && (attempts_left > 0 || self.quiz.unlimited_attempts?)
+  end
+
+  # Locate the Quiz Submission for this participant, regardless of them being
+  # enrolled students, or anonymous participants.
+  #
+  # @return [Relation]
+  #   The QS Relation, for the participant.
+  def self.for_participant(participant)
+    participant.anonymous? ?
+        where(temporary_user_code: participant.user_code) :
+        where(user_id: participant.user.id)
   end
 end

@@ -33,6 +33,7 @@ define([
   'compiled/editor/MultipleChoiceToggle',
   'compiled/str/TextHelper',
   'compiled/views/quizzes/editor/KeyboardShortcuts',
+  'INST', // safari sniffing for VO workarounds
   'jquery.ajaxJSON' /* ajaxJSON */,
   'jquery.instructure_date_and_time' /* time_field, datetime_field */,
   'jquery.instructure_forms' /* formSubmit, fillFormData, getFormData, formErrors, errorBox */,
@@ -54,7 +55,7 @@ define([
             wikiSidebar, DueDateListView, DueDateOverrideView, Quiz,
             DueDateList,SectionList,
             MissingDateDialog,MultipleChoiceToggle,TextHelper,
-            RCEKeyboardShortcuts){
+            RCEKeyboardShortcuts, INST){
 
   var dueDateList, overrideView, quizModel, sectionList, correctAnswerVisibility,
       scoreValidation;
@@ -806,16 +807,17 @@ define([
 
     parseInput: function($input, type) {
       if ($input.val() == "") { return; }
+      var val = $input.val().replace(/,/g, '');
       if (type == "int") {
-        var val = parseInt($input.val(), 10);
+        val = parseInt(val, 10);
         if (isNaN(val)) { val = 0; }
         $input.val(val);
       } else if (type == "float") {
-        var val = Math.round(parseFloat($input.val()) * 100.0) / 100.0;
+        val = Math.round(parseFloat(val) * 100.0) / 100.0;
         if (isNaN(val)) { val = 0.0; }
         $input.val(val);
       } else if (type == "float_long") {
-        var val = Math.round(parseFloat($input.val()) * 10000.0) / 10000.0;
+        val = Math.round(parseFloat(val) * 10000.0) / 10000.0;
         if (isNaN(val)) { val = 0.0; }
         $input.val(val);
       }
@@ -1119,7 +1121,7 @@ define([
     data.answer_match_left = data.left || data.answer_match_left;
     data.answer_match_left_html = data.left_html || data.answer_match_left_html;
     data.answer_match_right = data.right || data.answer_match_right;
-    data.answer_exact = data.exact || data.answer_exact;
+    data.answer_exact = data.exact === undefined ? data.answer_exact : data.exact;
     data.answer_error_margin = data.answer_error_margin || data.margin;
     data.answer_range_start = data.start || data.answer_range_start;
     data.answer_range_end = data.end || data.answer_range_end;
@@ -1932,9 +1934,42 @@ define([
     });
 
     $(document).delegate("a.comment_focus", 'focus click', function(event) {
+      var $commentEditor;
+      var $focusProxy = $(this);
+      var focusEditor = function() {
+        $commentEditor.focus().select();
+      };
+
       event.preventDefault();
-      $(this).parents(".question_comment,.answer_comments").removeClass('empty')
-        .find("textarea.comments").focus().select();
+
+      $commentEditor = $focusProxy
+        .closest('.question_comment, .answer_comments')
+          .removeClass('empty')
+          .find('textarea.comments');
+
+      // Hack to fix focusing the editor on Safari using keyboard arrows under
+      // VoiceOver (tab worked just fine, just not VO+arrow cursor navigation)
+      // by waiting a while before we focus the comment editor.
+      //
+      // Read below for a "guess" on why this is happening.
+      //
+      // It seems VO/Safari ignores manual focus calls past a certain threshold,
+      // so the fact that we're focusing the a.comment_focus then moving focus
+      // to the textarea does not work with arrows. This is the closest thing I
+      // found to the issue: http://bit.ly/1rkdSUh
+      //
+      // @since CNVS-15099
+      if (INST.browser.safari && event.type === 'focusin') {
+        setTimeout(function() {
+          // don't focus the editor if the user has tabbed/moved away from the
+          // proxy anchor
+          if ($focusProxy.is(':focus')) {
+            focusEditor();
+          }
+        }, 500 /* the magic started working at 350ms but it wasn't reliable */);
+      } else {
+        focusEditor();
+      }
     });
 
     $(document).delegate("textarea.comments", 'focus', function() {
@@ -2841,6 +2876,17 @@ define([
         $question.find(".question_points").text(questionData.points_possible);
         quiz.updateDisplayQuestion($question.find(".display_question"), questionData, true);
         if ($teaser.hasClass('to_edit')) {
+          // we need to explicity set our quiz variables in the dom
+          // or this appears to be adding a new question instead of editing
+          var ques = $question.find(".question");
+          var link = $question.find("a.update_question_url");
+          var qId  = $question.find(".assessment_question_id")
+          var href = link.attr('href');
+
+          ques.attr("id", "question_" + question_data.id);
+          link.attr("href", href.replace(/ions\/.*/, "ions/" + question_data.id));
+          qId.html(question_data.id);
+
           $question.find(".edit_question_link").click();
         }
       }
@@ -2921,8 +2967,284 @@ define([
       }
     });
 
+    // accessible sortables
+    var accessibleSortables = {
+
+      init: function(target, questions, form) {
+        this.$questions = questions;
+        this.$form      = form;
+
+        this.selected   = this.selectedItem(target);
+        this.items      = this.sortableItems();
+        this.intoGroups = this.findGroups();
+
+        this.buildHeader();
+        this.buildGroupMenu();
+        this.showDialog();
+      },
+
+      selectedItem: function(target) {
+        var target = $(target);
+        var group  = target.closest(".group_top");
+        var holder = target.closest(".question");
+        var parent = group.length > 0 ? group : holder;
+
+        return {
+          id:   parent.attr('id').replace(/group_top_|question_/, ""),
+          type: group.length > 0 ? 'group' : 'question',
+          name: parent.find(".name").text(),
+          sortable: group.length > 0 ? group : holder.parent()
+        }
+      },
+
+      sortableItems: function() {
+        return this.$questions.children('.quiz_sortable').map(function(i, item) {
+          var item = $(item);
+          var sortable = item;
+
+          // the group each question belongs to
+          var groupId;
+          if (item.hasClass('group')) {
+            groupId = item.prevAll('.group_top').attr('id').replace(/group_top_/, "")
+          }
+
+          // scope down to question to get id
+          if (item.hasClass('question_holder')) {
+            item = item.find('.question');
+          }
+
+          return {
+            id: item.attr('id').replace(/group_top_|question_/, ""),
+            type: item.hasClass('group_top') ? 'group' : 'question',
+            name: item.find('.name').text(),
+            group: groupId,
+            top: !item.parent().hasClass('group'),
+            sortable: sortable
+          }
+        });
+      },
+
+      // we can move item to a group if
+      //   1. the selected item is a question
+      //   2. there are groups on the quiz
+      findGroups: function() {
+        var intoGroups = [];
+        if (this.selected.type == 'question') {
+          intoGroups = $.grep(this.items, function(item) {
+            return item.type == 'group';
+          });
+        }
+        return intoGroups;
+      },
+
+      buildHeader: function() {
+        this.$form.find('.quiz_item_name').text(this.selected.name);
+      },
+
+      buildGroupMenu: function() {
+        var options = [];
+        var moveWrapper = this.$form.find(".move_select_group");
+        var moveSelect  = this.$form.find("#move_select_group");
+
+        if (this.intoGroups.length > 0) {
+          options = $.map(this.intoGroups, function(g) {
+            return '<option value="' + g.id + '">' + g.name + '</option>';
+          });
+          options.unshift('<option value="top">' +
+            I18n.t('top_level', '-- Top level --') +
+          '</option>');
+
+          moveWrapper.show();
+        } else {
+          moveWrapper.hide();
+        }
+        moveSelect.html(options.join(''));
+
+        // trigger building 'place' menu
+        moveSelect.change(this.buildPlaceMenu.bind(this));
+        moveSelect.trigger('change');
+      },
+
+      buildPlaceMenu: function(event) {
+        var option = $(event.target).find('option:selected');
+        var value = option.length > 0 ? option.attr('value') : 'top';
+
+        // filter by selected
+        var filtered = this.itemsInGroup(value);
+
+        // build options
+        var options = $.map(filtered, function(item) {
+          return '<option value="' + item.type + '_' + item.id + '">' +
+            I18n.t('before_quiz_item', "before %{name}", {name: item.name}) +
+          '</option>';
+        });
+        options.push('<option value="last">' +
+          I18n.t('at_the_bottom', "-- at the bottom --") +
+        '</option>');
+        this.$form.find('#move_select_question').html(options.join(''));
+      },
+
+      itemsInGroup: function(group) {
+        return $.grep(this.items, function(item) {
+          return item.id != this.selected.id &&
+                 (group == 'top' ? item.top : item.group == group);
+        }.bind(this));
+      },
+
+      showDialog: function() {
+        var displayGroupSelector = this.intoGroups.length > 0;
+
+        var dialog = this.$form.dialog({
+          autoOpen: false,
+          modal: true,
+          width: 400,
+          height: displayGroupSelector ? 345: 265,
+          close: this.removeEventListeners.bind(this),
+          open: this.focusDialog.bind(this)
+        }).dialog('open');
+
+        this.$form.find("h2").focus();
+
+        this.$form.find('#move_quiz_item_cancel_btn').on('click keyclick', function() {
+          this.$form.filter(":visible").dialog('close');
+        }.bind(this));
+
+        this.$form.find('#move_quiz_item_submit_btn').on('click keyclick', this.saveMove.bind(this));
+      },
+
+      focusDialog: function() {
+        this.$form.find("h2").focus();
+      },
+
+      removeEventListeners: function() {
+        this.$form.find('#move_quiz_item_cancel_btn').off();
+        this.$form.find('#move_quiz_item_submit_btn').off();
+        this.$form.find('#move_select_group').off();
+      },
+
+      saveMove: function(event) {
+        event.preventDefault();
+
+        // get selected values
+        var option = this.$form.find("#move_select_group option:selected");
+        var group = option.length > 0 ? option.attr('value') : 'top';
+
+        this.reorderDom(group);
+        this.ajaxPostReorder(group);
+
+        // close form
+        this.$form.filter(":visible").dialog('close');
+      },
+
+      reorderDom: function(group) {
+        var option = this.$form.find("#move_select_question option:selected");
+        var place = option.attr('value');
+        var bottom = this.selected.sortable.nextAll('.group_bottom').first();
+
+        // move to bottom of the group
+        if (place == 'last') {
+          var inGroup =  this.itemsInGroup(group);
+
+          // there is at least 1 item already in the group
+          if (inGroup.length > 0) {
+            var lastItem = inGroup[inGroup.length - 1].sortable;
+            if (lastItem.hasClass('group_top')) {
+              lastItem = lastItem.nextAll('.group_bottom');
+            }
+            lastItem.after(this.selected.sortable);
+
+          // adding as the first item in the group
+          } else {
+            var groupElt = this.$questions.find("#group_top_"+group);
+            groupElt.after(this.selected.sortable);
+          }
+
+        // move to before the item chosen
+        } else {
+          var beforeItem = $.grep(this.items, function(item) {
+            return item.type + "_" + item.id == place;
+          })[0].sortable;
+          beforeItem.before(this.selected.sortable);
+        }
+
+        this.reorderDomGroupContent(bottom);
+        this.setQuestionGroupClass(group);
+      },
+      reorderDomGroupContent: function(bottom) {
+        if (this.selected.type != 'group') { return; }
+
+        var prev = this.selected.sortable;
+        var items = this.itemsInGroup(this.selected.id);
+        if (items.length) {
+          $.each(items, function(i, item) {
+            prev.after(item.sortable);
+            prev = item.sortable;
+          });
+        }
+        prev.after(bottom);
+      },
+      setQuestionGroupClass: function(group) {
+        if (this.selected.type != 'question') { return; }
+
+        if (group == 'top') {
+          this.selected.sortable.removeClass('group');
+        } else {
+          this.selected.sortable.addClass('group');
+        }
+      },
+
+      ajaxPostReorder: function(group) {
+        var params = this.buildGroupParams(group);
+
+        var item;
+        if (group == 'top') {
+          item = $("#quiz_urls .reorder_questions_url, #bank_urls .reorder_questions_url");
+        } else {
+          item = $("#group_top_" + group).find(".reorder_group_questions_url");
+        }
+        var url = item.attr('href');
+        this.$questions.loadingImage();
+
+        $.ajaxJSON(url, 'POST', JSON.stringify({order: params}), function(data) {
+          this.$questions.loadingImage('remove');
+        }.bind(this), {}, {contentType: "application/json"});
+      },
+
+      buildGroupParams: function(group) {
+        var option = this.$form.find("#move_select_question option:selected");
+        var place = option.attr('value');
+
+        // rebuild the group list adding in our selection
+        var selected = this.selected;
+        var params = [];
+        $.each(this.itemsInGroup(group), function(i, item) {
+          if (item.type + '_' + item.id == place) {
+            params.push({type: selected.type, id: selected.id});
+          }
+          params.push({type: item.type, id: item.id});
+        }.bind(this));
+
+        if (place == 'last') {
+          params.push({type: selected.type, id: selected.id});
+        }
+        return params;
+      }
+    }
+    $(document).on('click keypress', ".draggable-handle", function(event) {
+      event.preventDefault();
+      if (event.type == "keypress" && event.keyCode != 13) { return; }
+
+      accessibleSortables.init(
+        $(event.target), $("#questions"), $("#move_quiz_item_form")
+      );
+    });
+    $(document).on('focus blur', ".draggable-handle", function(e) {
+      var warning = $(e.target).find('.accessibility-warning');
+      warning[e.type == 'focusin' ? 'removeClass' : 'addClass']('screenreader-only');
+    });
+
     $("#questions").sortable({
-      handle: '.move_icon',
+      handle: '.draggable-handle',
       helper: function(event, ui) {
         return ui.clone().removeClass('group');
       },
@@ -3411,7 +3733,7 @@ define([
     });
     $question.bind('recompute_variables', function(event, in_dom) {
       $question.find(".variables .variable").each(function() {
-        $(this).find(".variable_setting:first").trigger('change', in_dom ? null : {recompute: true});
+        $(this).find(".variable_setting:first").trigger('change', in_dom ? { recompute: true, cache: true } : { cache: true });
       });
     });
     $question.bind('settings_change', function(event, remove) {
@@ -3430,6 +3752,7 @@ define([
       }
       $question.find(".combinations_holder").showIf($question.find(".combinations tbody tr").length > 0);
     });
+
     $question.find(".variables").delegate('.variable_setting', 'change', function(event, options) {
       var question_type = $question.find(".question_type").val();
       if (question_type != 'calculated_question') {
@@ -3437,7 +3760,7 @@ define([
       }
       var $variable = $(event.target).parents(".variable")
       var data = $variable.data('cached_data');
-      if (!data || !options || !options.cache) {
+      if (!data || !options || !options.cache || (options.recompute && options.cache)) {
         data = $variable.getFormData();
         data.min = parseFloat(data.min) || 0;
         data.max = Math.max(data.min, parseFloat(data.max) || 0);

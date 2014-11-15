@@ -114,7 +114,7 @@ module Api::V1::Submission
       hash['media_comment'] = media_comment_json(:media_id => attempt.media_comment_id, :media_type => attempt.media_comment_type)
     end
 
-    if attempt.turnitin_data && attempt.grants_right?(@current_user, :view_turnitin_report)
+    if attempt.turnitin_data.present? && attempt.grants_right?(@current_user, :view_turnitin_report)
       turnitin_hash = attempt.turnitin_data.dup
       turnitin_hash.delete(:last_processed_attempt)
       hash['turnitin_data'] = turnitin_hash
@@ -126,7 +126,8 @@ module Api::V1::Submission
       hash['attachments'] = attachments.map do |attachment|
         attachment.skip_submission_attachment_lock_checks = true
         atjson = attachment_json(attachment, user, {},
-                                 submission_attachment: true)
+                                 submission_attachment: true,
+                                 include: ['preview_url'])
         attachment.skip_submission_attachment_lock_checks = false
         atjson
       end.compact unless attachments.blank?

@@ -29,6 +29,7 @@ module Api::V1::Attachment
 
   def attachment_json(attachment, user, url_options = {}, options = {})
     options.reverse_merge!(submission_attachment: false)
+    includes = options[:include] || []
 
     # it takes loads of queries to figure out that a teacher doesn't have
     # :update permission on submission attachments.  we'll handle the
@@ -82,7 +83,17 @@ module Api::V1::Attachment
       'thumbnail_url' => thumbnail_download_url,
     }
     locked_json(hash, attachment, user, 'file')
-    hash['user'] = user_display_json(attachment.user, attachment.context) if (options[:include] || []).include? 'user'
+
+    if includes.include? 'user'
+      context = attachment.context
+      context = :profile if context == user
+      hash['user'] = user_display_json(attachment.user, context)
+    end
+    if includes.include? 'preview_url'
+      hash['preview_url'] = attachment.crocodoc_url(user) ||
+                            attachment.canvadoc_url(user)
+    end
+
     hash
   end
 
@@ -99,7 +110,6 @@ module Api::V1::Attachment
     atts = process_attachment_params(params)
     atts.delete(:display_name)
     @attachment.attributes = atts
-    @attachment.submission_attachment = true if opts[:submission_attachment]
     @attachment.file_state = 'deleted'
     @attachment.workflow_state = 'unattached'
     @attachment.user = @current_user
@@ -140,7 +150,7 @@ module Api::V1::Attachment
       json = @attachment.ajax_upload_params(@current_pseudonym,
                                                      api_v1_files_create_url(:on_duplicate => duplicate_handling, :quota_exemption => quota_exemption),
                                                      api_v1_files_create_success_url(@attachment, :uuid => @attachment.uuid, :on_duplicate => duplicate_handling, :quota_exemption => quota_exemption),
-                                                     :ssl => request.ssl?, :file_param => opts[:file_param]).
+                                                     :ssl => request.ssl?, :file_param => opts[:file_param], no_redirect: params[:no_redirect]).
       slice(:upload_url,:upload_params,:file_param)
     end
 
@@ -157,7 +167,7 @@ module Api::V1::Attachment
   end
 
   def check_quota_after_attachment(request)
-    exempt = request.params[:quota_exemption] == @attachment.quota_exemption_key
+    exempt = @attachment.verify_quota_exemption_key(request.params[:quota_exemption])
     if !exempt && Attachment.over_quota?(@attachment.context, @attachment.size)
       render(:json => {:message => 'file size exceeds quota limits'}, :status => :bad_request)
       return false

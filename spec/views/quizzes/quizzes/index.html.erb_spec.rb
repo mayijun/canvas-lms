@@ -19,18 +19,23 @@
 require File.expand_path(File.dirname(__FILE__) + '/../../../spec_helper')
 require File.expand_path(File.dirname(__FILE__) + '/../../views_helper')
 
-describe "/quizzes/quizzes/index" do
+describe "/quizzes/quizzes/index_legacy" do
+  before :once do
+    Account.default.enable_feature!(:draft_state)
+  end
+
   it "should render" do
     course_with_student
     view_context
+    assigns[:body_classes] = []
     assigns[:quizzes] = [@course.quizzes.create!]
     assigns[:unpublished_quizzes] = []
     assigns[:assignment_quizzes] = assigns[:quizzes]
     assigns[:open_quizzes] = assigns[:quizzes]
     assigns[:surveys] = assigns[:quizzes]
     assigns[:submissions_hash] = {}
-    render "quizzes/quizzes/index"
-    response.should_not be_nil
+    render "quizzes/quizzes/index_legacy"
+    expect(response).not_to be_nil
   end
 
   it "with draft state enabled should render" do
@@ -40,14 +45,8 @@ describe "/quizzes/quizzes/index" do
     view_context
     assigns[:body_classes] = []
 
-    assigns[:quizzes] = [@course.quizzes.create!]
-    assigns[:assignment_json] = assigns[:quizzes]
-    assigns[:open_json]       = assigns[:quizzes]
-    assigns[:surveys_json]    = assigns[:quizzes]
-    assigns[:submissions_hash] = {}
-
     render "quizzes/quizzes/index"
-    response.should_not be_nil
+    expect(response).not_to be_nil
   end
 end
 

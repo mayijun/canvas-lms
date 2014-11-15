@@ -24,7 +24,7 @@ module LtiOutbound
     def initialize(options)
       @url = options[:url] || raise('URL required for generating LTI content')
       @tool = options[:tool] || raise('Tool required for generating LTI content')
-      @user = options[:user] || raise('User required for generating LTI content')
+      @user = options[:user] || LTIUser.new #|| raise('User required for generating LTI content')
       @account = options[:account] || raise('Account required for generating LTI content')
       @context = options[:context] || raise('Context required for generating LTI content')
       @link_code = options[:link_code] || raise('Link Code required for generating LTI content')
@@ -35,10 +35,6 @@ module LtiOutbound
       @consumer_instance = context.consumer_instance || raise('Consumer instance required for generating LTI content')
 
       @variable_substitutor = options[:variable_substitutor]
-      variable_substitutor.add_substitution '$Person.name.family', @user.last_name
-      variable_substitutor.add_substitution '$Person.name.full', @user.name
-      variable_substitutor.add_substitution '$Person.name.given', @user.first_name
-      variable_substitutor.add_substitution '$Person.address.timezone', @user.timezone
 
       @hash = {}
     end
@@ -77,6 +73,7 @@ module LtiOutbound
       hash['text'] = CGI::escape(selected_html) if selected_html
 
       hash['roles'] = user.current_role_types # AccountAdmin, Student, Faculty or Observer
+      hash['ext_roles'] = '$Canvas.xuser.allRoles'
 
       hash['custom_canvas_enrollment_state'] = '$Canvas.enrollment.enrollmentState'
 

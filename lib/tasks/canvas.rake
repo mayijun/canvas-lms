@@ -112,7 +112,7 @@ namespace :canvas do
     check_syntax = truthy_values.include?(args[:check_syntax])
 
     require 'parallel'
-    processes = ENV['CANVAS_BUILD_CONCURRENCY'] || Parallel.processor_count
+    processes = (ENV['CANVAS_BUILD_CONCURRENCY'] || Parallel.processor_count).to_i
     puts "working in #{processes} processes"
 
     tasks = {
@@ -195,6 +195,20 @@ namespace :lint do
       raise "lint:render_json test failed"
     else
       puts "lint:render_json test succeeded"
+    end
+  end
+end
+
+if Rails.version < '4.1'
+  old_task = Rake::Task['db:_dump']
+  old_actions = old_task.actions.dup
+  old_task.actions.clear
+
+  old_task.enhance do
+    if ActiveRecord::Base.dump_schema_after_migration == false
+      # do nothing
+    else
+      old_actions.each(&:call)
     end
   end
 end

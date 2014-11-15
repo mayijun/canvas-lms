@@ -72,21 +72,23 @@ describe "differentiated_assignments" do
     ao.save!
   end
 
-  def give_section_foo_due_date(assignment)
+  def give_section_due_date(assignment, section)
     create_override_for_assignment(assignment) do |ao|
-      ao.set = @section_foo
+      ao.set = section
       ao.due_at = 3.weeks.from_now
     end
   end
 
   def ensure_user_does_not_see_assignment
     visibile_assignment_ids = AssignmentStudentVisibility.where(user_id: @user.id, course_id: @course.id).pluck(:assignment_id)
-    visibile_assignment_ids.map(&:to_i).include?(@assignment.id).should be_false
+    expect(visibile_assignment_ids.map(&:to_i).include?(@assignment.id)).to be_falsey
+    expect(AssignmentStudentVisibility.visible_assignment_ids_in_course_by_user(user_id: [@user.id], course_id: [@course.id])[@user.id]).not_to include(@assignment.id)
   end
 
   def ensure_user_sees_assignment
     visibile_assignment_ids = AssignmentStudentVisibility.where(user_id: @user.id, course_id: @course.id).pluck(:assignment_id)
-    visibile_assignment_ids.map(&:to_i).include?(@assignment.id).should be_true
+    expect(visibile_assignment_ids.map(&:to_i).include?(@assignment.id)).to be_truthy
+    expect(AssignmentStudentVisibility.visible_assignment_ids_in_course_by_user(user_id: [@user.id], course_id: [@course.id])[@user.id]).to include(@assignment.id)
   end
 
   context "table" do
@@ -94,31 +96,31 @@ describe "differentiated_assignments" do
       course_with_differentiated_assignments_enabled
       add_multiple_sections
       assignment_with_true_only_visible_to_overrides
-      give_section_foo_due_date(@assignment)
+      give_section_due_date(@assignment, @section_foo)
       enroller_user_in_section(@section_foo)
       # at this point there should be an entry in the table
       @visibility_object = AssignmentStudentVisibility.first
     end
 
     it "returns objects" do
-      @visibility_object.should_not be_nil
+      expect(@visibility_object).not_to be_nil
     end
 
     it "doesnt allow updates" do
       @visibility_object.user_id = @visibility_object.user_id + 1
-      lambda {@visibility_object.save!}.should raise_error(ActiveRecord::ReadOnlyRecord)
+      expect {@visibility_object.save!}.to raise_error(ActiveRecord::ReadOnlyRecord)
     end
 
     it "doesnt allow new records" do
-      lambda {
+      expect {
         AssignmentStudentVisibility.create!(user_id: @user.id,
                                             assignment_id: @assignment_id,
                                             course_id: @course.id)
-        }.should raise_error(ActiveRecord::ReadOnlyRecord)
+        }.to raise_error(ActiveRecord::ReadOnlyRecord)
     end
 
     it "doesnt allow deletion" do
-      lambda {@visibility_object.destroy}.should raise_error(ActiveRecord::ReadOnlyRecord)
+      expect {@visibility_object.destroy}.to raise_error(ActiveRecord::ReadOnlyRecord)
     end
 
   end
@@ -131,7 +133,7 @@ describe "differentiated_assignments" do
     context "assignment only visibile to overrides" do
       before do
         assignment_with_true_only_visible_to_overrides
-        give_section_foo_due_date(@assignment)
+        give_section_due_date(@assignment, @section_foo)
       end
 
       context "user in section with override who then changes sections" do
@@ -184,6 +186,12 @@ describe "differentiated_assignments" do
           @assignment.assignment_overrides.all.each(&:destroy!)
           ensure_user_does_not_see_assignment
         end
+        it "should not return duplicate visibilities with multiple visible sections" do
+          enroller_user_in_section(@section_bar, {user: @user})
+          give_section_due_date(@assignment, @section_bar)
+          visibile_assignment_ids = AssignmentStudentVisibility.where(user_id: @user.id, course_id: @course.id)
+          expect(visibile_assignment_ids.count).to eq 1
+        end
       end
       context "user in section with no override" do
         before{enroller_user_in_section(@section_bar)}
@@ -203,11 +211,15 @@ describe "differentiated_assignments" do
     context "assignment with false only_visible_to_overrides" do
       before do
         assignment_with_false_only_visible_to_overrides
-        give_section_foo_due_date(@assignment)
+        give_section_due_date(@assignment, @section_foo)
       end
       context "user in default section" do
         it "should show the assignment to the user" do
           ensure_user_sees_assignment
+        end
+        it "should not show deleted assignments" do
+          @assignment.destroy
+          ensure_user_does_not_see_assignment
         end
       end
       context "user in section with override" do
@@ -234,7 +246,7 @@ describe "differentiated_assignments" do
     context "assignment with null only_visible_to_overrides" do
       before do
         assignment_with_null_only_visible_to_overrides
-        give_section_foo_due_date(@assignment)
+        give_section_due_date(@assignment, @section_foo)
       end
       context "user in default section" do
         it "should show the assignment to the user" do

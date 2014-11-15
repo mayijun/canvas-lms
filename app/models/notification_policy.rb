@@ -17,15 +17,14 @@
 #
 
 class NotificationPolicy < ActiveRecord::Base
-  
-  belongs_to :notification
+
+  include NotificationPreloader
   belongs_to :communication_channel
   has_many :delayed_messages
 
   attr_accessible :notification, :communication_channel, :frequency, :notification_id, :communication_channel_id
 
   validates_presence_of :communication_channel_id, :frequency
-  validates_inclusion_of :broadcast, in: [true, false]
   validates_inclusion_of :frequency, in: [Notification::FREQ_IMMEDIATELY,
                                           Notification::FREQ_DAILY,
                                           Notification::FREQ_WEEKLY,
@@ -52,11 +51,6 @@ class NotificationPolicy < ActiveRecord::Base
 
   scope :in_state, lambda { |state| where(:workflow_state => state.to_s) }
 
-  def communication_preference
-    return nil unless broadcast
-    communication_channel || user.communication_channel
-  end
-  
   def self.spam_blocked_by(user)
     NotificationPolicy.where(:communication_channel_id => user.communication_channels.pluck(:id)).delete_all
     cc = user.communication_channel
@@ -145,7 +139,7 @@ class NotificationPolicy < ActiveRecord::Base
   # and/or updates it
   def self.find_or_update_for(communication_channel, notification_name, frequency = nil)
     notification_name = notification_name.titleize
-    notification = Notification.by_name(notification_name)
+    notification = BroadcastPolicy.notification_finder.by_name(notification_name)
     raise ActiveRecord::RecordNotFound unless notification
     communication_channel.shard.activate do
       unique_constraint_retry do
@@ -184,7 +178,7 @@ class NotificationPolicy < ActiveRecord::Base
                              'never'
                            end
             np.save!
-          rescue ActiveRecord::Base::UniqueConstraintViolation
+          rescue ActiveRecord::RecordNotUnique
             np = nil
             raise ActiveRecord::Rollback
           end

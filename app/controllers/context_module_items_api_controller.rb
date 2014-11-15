@@ -209,10 +209,10 @@ class ContextModuleItemsApiController < ApplicationController
   #   Item specification} for more details.
   #   Includes standard lock information for each item.
   #
-  # @argument search_term [Optional, String]
+  # @argument search_term [String]
   #   The partial title of the items to match and return.
   #
-  # @argument student_id [Optional]
+  # @argument student_id
   #   Returns module completion information for the student with this id.
   #
   # @example_request
@@ -223,7 +223,7 @@ class ContextModuleItemsApiController < ApplicationController
   def index
     if authorized_action(@context, @current_user, :read)
       mod = @context.modules_visible_to(@student || @current_user).find(params[:module_id])
-      ContextModule.send(:preload_associations, mod, {:content_tags => :content})
+      ActiveRecord::Associations::Preloader.new(mod, content_tags: :content).run
       route = polymorphic_url([:api_v1, @context, mod, :items])
       scope = mod.content_tags_visible_to(@student || @current_user)
       scope = ContentTag.search_by_attribute(scope, :title, params[:search_term])
@@ -243,7 +243,7 @@ class ContextModuleItemsApiController < ApplicationController
   #   Item specification} for more details.
   #   Includes standard lock information for each item.
   #
-  # @argument student_id [Optional]
+  # @argument student_id
   #   Returns module completion information for the student with this id.
   #
   # @example_request
@@ -281,20 +281,20 @@ class ContextModuleItemsApiController < ApplicationController
   #
   # Create and return a new module item
   #
-  # @argument module_item[title] [Optional, String]
+  # @argument module_item[title] [String]
   #   The name of the module item and associated content
   #
-  # @argument module_item[type] [String, "File"|"Page"|"Discussion"|"Assignment"|"Quiz"|"SubHeader"|"ExternalUrl"|"ExternalTool"]
+  # @argument module_item[type] [Required, String, "File"|"Page"|"Discussion"|"Assignment"|"Quiz"|"SubHeader"|"ExternalUrl"|"ExternalTool"]
   #   The type of content linked to the item
   #
-  # @argument module_item[content_id] [String]
+  # @argument module_item[content_id] [Required, String]
   #   The id of the content to link to the module item. Required, except for
   #   'ExternalUrl', 'Page', and 'SubHeader' types.
   #
-  # @argument module_item[position] [Optional, Integer]
+  # @argument module_item[position] [Integer]
   #   The position of this item in the module (1-based).
   #
-  # @argument module_item[indent] [Optional, Integer]
+  # @argument module_item[indent] [Integer]
   #   0-based indent level; module items may be indented to show a hierarchy
   #
   # @argument module_item[page_url] [String]
@@ -305,11 +305,11 @@ class ContextModuleItemsApiController < ApplicationController
   #   External url that the item points to. [Required for 'ExternalUrl' and
   #   'ExternalTool' types.
   #
-  # @argument module_item[new_tab] [Optional, Boolean]
+  # @argument module_item[new_tab] [Boolean]
   #   Whether the external tool opens in a new tab. Only applies to
   #   'ExternalTool' type.
   #
-  # @argument module_item[completion_requirement][type] [Optional, String, "must_view"|"must_contribute"|"must_submit"]
+  # @argument module_item[completion_requirement][type] [String, "must_view"|"must_contribute"|"must_submit"]
   #   Completion requirement for this module item.
   #   "must_view": Applies to all item types
   #   "must_contribute": Only applies to "Assignment", "Discussion", and "Page" types
@@ -342,7 +342,7 @@ class ContextModuleItemsApiController < ApplicationController
       item_params[:id] = params[:module_item][:content_id]
       if ['Page', 'WikiPage'].include?(item_params[:type])
         if page_url = params[:module_item][:page_url]
-          if wiki_page = @context.wiki.wiki_pages.not_deleted.find_by_url(page_url)
+          if wiki_page = @context.wiki.wiki_pages.not_deleted.where(url: page_url).first
             item_params[:id] = wiki_page.id
           else
             return render :json => {:message => "invalid page_url parameter"}, :status => :bad_request
@@ -373,23 +373,23 @@ class ContextModuleItemsApiController < ApplicationController
   #
   # Update and return an existing module item
   #
-  # @argument module_item[title] [Optional, String]
+  # @argument module_item[title] [String]
   #   The name of the module item
   #
-  # @argument module_item[position] [Optional, Integer]
+  # @argument module_item[position] [Integer]
   #   The position of this item in the module (1-based)
   #
-  # @argument module_item[indent] [Optional, Integer]
+  # @argument module_item[indent] [Integer]
   #   0-based indent level; module items may be indented to show a hierarchy
   #
-  # @argument module_item[external_url] [Optional, String]
+  # @argument module_item[external_url] [String]
   #   External url that the item points to. Only applies to 'ExternalUrl' type.
   #
-  # @argument module_item[new_tab] [Optional, Boolean]
+  # @argument module_item[new_tab] [Boolean]
   #   Whether the external tool opens in a new tab. Only applies to
   #   'ExternalTool' type.
   #
-  # @argument module_item[completion_requirement][type] [Optional, "must_view"|"must_contribute"|"must_submit"]
+  # @argument module_item[completion_requirement][type] [String, "must_view"|"must_contribute"|"must_submit"]
   #   Completion requirement for this module item.
   #   "must_view": Applies to all item types
   #   "must_contribute": Only applies to "Assignment", "Discussion", and "Page" types
@@ -400,10 +400,10 @@ class ContextModuleItemsApiController < ApplicationController
   #   Minimum score required to complete, Required for completion_requirement
   #   type 'min_score'.
   #
-  # @argument module_item[published] [Optional, Boolean]
+  # @argument module_item[published] [Boolean]
   #   Whether the module item is published and visible to students.
   #
-  # @argument module_item[module_id] [Optional, String]
+  # @argument module_item[module_id] [String]
   #   Move this item to another module by specifying the target module id here.
   #   The target module must be in the same course.
   #
@@ -427,7 +427,7 @@ class ContextModuleItemsApiController < ApplicationController
       @tag.indent = params[:module_item][:indent] if params[:module_item][:indent]
       @tag.new_tab = value_to_boolean(params[:module_item][:new_tab]) if params[:module_item][:new_tab]
       if (target_module_id = params[:module_item][:module_id]) && target_module_id.to_i != @tag.context_module_id
-        target_module = @context.context_modules.find_by_id(target_module_id)
+        target_module = @context.context_modules.where(id: target_module_id).first
         return render :json => {:message => "invalid module_id"}, :status => :bad_request unless target_module
         old_module = @context.context_modules.find(@tag.context_module_id)
         @tag.remove_from_list
@@ -526,7 +526,7 @@ class ContextModuleItemsApiController < ApplicationController
       else
         # map wiki page url to id
         if asset_type == 'WikiPage'
-          page = @context.wiki.wiki_pages.not_deleted.find_by_url(asset_id)
+          page = @context.wiki.wiki_pages.not_deleted.where(url: asset_id).first
           asset_id = page.id if page
         else
           asset_id = asset_id.to_i
@@ -534,12 +534,12 @@ class ContextModuleItemsApiController < ApplicationController
 
         # find the associated assignment id, if applicable
         if asset_type == 'Quizzes::Quiz'
-          asset = @context.quizzes.find_by_id(asset_id.to_i)
+          asset = @context.quizzes.where(id: asset_id.to_i).first
           associated_assignment_id = asset.assignment_id if asset
         end
 
         if asset_type == 'DiscussionTopic'
-          asset = @context.send(asset_type.tableize).find_by_id(asset_id.to_i)
+          asset = @context.send(asset_type.tableize).where(id: asset_id.to_i).first
           associated_assignment_id = asset.assignment_id if asset
         end
 
@@ -569,7 +569,7 @@ class ContextModuleItemsApiController < ApplicationController
         end
         result[:items] << hash
       end
-      modules = @context.context_modules.find_all_by_id(module_ids.to_a)
+      modules = @context.context_modules.where(id: module_ids.to_a)
       result[:modules] = modules.map { |mod| module_json(mod, @current_user, session) }
 
       render :json => result

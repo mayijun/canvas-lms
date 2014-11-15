@@ -66,10 +66,10 @@ class WikiPage < ActiveRecord::Base
     return unless self.wiki
     # TODO i18n (see wiki.rb)
     if self.title == "Front Page" && self.new_record?
-      baddies = self.wiki.wiki_pages.not_deleted.find_all_by_title("Front Page").select{|p| p.url != "front-page" }
+      baddies = self.wiki.wiki_pages.not_deleted.where(title: "Front Page").select{|p| p.url != "front-page" }
       baddies.each{|p| p.title = to_cased_title.call(p.url); p.save_without_broadcasting! }
     end
-    if existing = self.wiki.wiki_pages.not_deleted.find_by_title(self.title)
+    if existing = self.wiki.wiki_pages.not_deleted.where(title: self.title).first
       return if existing == self
       real_title = self.title.gsub(/-(\d*)\z/, '') # remove any "-#" at the end
       n = $1 ? $1.to_i + 1 : 2
@@ -77,7 +77,7 @@ class WikiPage < ActiveRecord::Base
         mod = "-#{n}"
         new_title = real_title[0...(TITLE_LENGTH - mod.length)] + mod
         n = n.succ
-      end while self.wiki.wiki_pages.not_deleted.find_by_title(new_title)
+      end while self.wiki.wiki_pages.not_deleted.where(title: new_title).exists?
 
       self.title = new_title
     end
@@ -262,11 +262,11 @@ class WikiPage < ActiveRecord::Base
   end
 
   def context_module_tag_for(context)
-    @tag ||= self.context_module_tags.where(context_id: context, context_type: context.class.base_ar_class.name).first
+    @tag ||= self.context_module_tags.where(context_id: context, context_type: context.class.base_class.name).first
   end
 
   def context_module_action(user, context, action)
-    self.context_module_tags.where(context_id: context, context_type: context.class.base_ar_class.name).each do |tag|
+    self.context_module_tags.where(context_id: context, context_type: context.class.base_class.name).each do |tag|
       tag.context_module_action(user, action)
     end
   end
@@ -355,7 +355,7 @@ class WikiPage < ActiveRecord::Base
 
   def context(user=nil)
     shard.activate do
-      @context ||= Course.find_by_wiki_id(self.wiki_id) || Group.find_by_wiki_id(self.wiki_id)
+      @context ||= Course.where(wiki_id: self.wiki_id).first || Group.where(wiki_id: self.wiki_id).first
     end
   end
 

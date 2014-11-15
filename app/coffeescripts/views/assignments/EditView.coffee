@@ -174,8 +174,8 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly) ->
         kalturaEnabled: ENV?.KALTURA_ENABLED or false
         postToSISEnabled: ENV?.POST_TO_SIS or false
         isLargeRoster: ENV?.IS_LARGE_ROSTER or false
-        differentiatedAssignmnetsEnabled: ENV?.DIFFERENTIATED_ASSIGNMENTS_ENABLED or false
         submissionTypesFrozen: _.include(data.frozenAttributes, 'submission_types')
+        differentiatedAssignmentsEnabled: @assignment.differentiatedAssignmentsEnabled()
 
     _attachEditorToDescription: =>
       @$description.editorBox()
@@ -224,6 +224,7 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly) ->
         missingDateDialog = new MissingDateDialog
           validationFn: -> sections
           labelFn: (section) -> section.get 'name'
+          da_enabled: ENV?.DIFFERENTIATED_ASSIGNMENTS_ENABLED
           success: =>
             ValidatedFormView::submit.call(this)
         missingDateDialog.cancel = (e) ->
@@ -278,7 +279,7 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly) ->
       unless ENV?.IS_LARGE_ROSTER
         errors = @groupCategorySelector.validateBeforeSave(data, errors)
       errors = @_validatePointsPossible(data, errors)
-      errors = @_validatePercentagePoints(data, errors)
+      errors = @_validatePointsRequired(data, errors)
       data2 =
         assignment_overrides: @dueDateOverrideView.getAllDates(data)
       errors = @dueDateOverrideView.validateBeforeSave(data2,errors)
@@ -317,10 +318,12 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly) ->
       errors
 
     # Require points possible > 0
-    # if grading type === percent
-    _validatePercentagePoints: (data, errors) =>
-      if data.grading_type == 'percent' and (data.points_possible == "0" or isNaN(parseFloat(data.points_possible)))
+    # if grading type === percent || letter_grade || gpa_scale
+    _validatePointsRequired: (data, errors) =>
+      return errors unless _.include ['percent','letter_grade','gpa_scale'], data.grading_type
+
+      if data.points_possible == "0" or isNaN(parseFloat(data.points_possible))
         errors["points_possible"] = [
-          message: I18n.t 'percentage_points_possible', 'Points possible must be more than 0 for percentage grading'
+          message: I18n.t('points_possible_not_zero', "Points possible must be more than 0 for selected grading type")
         ]
       errors

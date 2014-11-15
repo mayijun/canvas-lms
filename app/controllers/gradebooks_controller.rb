@@ -112,8 +112,8 @@ class GradebooksController < ApplicationController
   end
 
   def attendance
-    @enrollment = @context.all_student_enrollments.find_by_user_id(params[:user_id]) if params[:user_id].present?
-    @enrollment ||= @context.all_student_enrollments.find_by_user_id(@current_user.id) if !@context.grants_right?(@current_user, session, :manage_grades)
+    @enrollment = @context.all_student_enrollments.where(user_id: params[:user_id]).first if params[:user_id].present?
+    @enrollment ||= @context.all_student_enrollments.where(user_id: @current_user).first if !@context.grants_right?(@current_user, session, :manage_grades)
     add_crumb t(:crumb, 'Attendance')
     if !@enrollment && @context.grants_right?(@current_user, session, :manage_grades)
       @assignments = @context.assignments.active.where(:submission_types => 'attendance').all
@@ -126,7 +126,7 @@ class GradebooksController < ApplicationController
     elsif @enrollment && @enrollment.grants_right?(@current_user, session, :read_grades)
       @assignments = @context.assignments.active.where(:submission_types => 'attendance').all
       @students = @context.students_visible_to(@current_user).order_by_sortable_name
-      @submissions = @context.submissions.find_all_by_user_id(@enrollment.user_id)
+      @submissions = @context.submissions.where(user_id: @enrollment.user_id).to_a
       @user = @enrollment.user
       render :action => "student_attendance"
       # render student_attendance, optional params[:assignment_id] to highlight and scroll to that particular assignment

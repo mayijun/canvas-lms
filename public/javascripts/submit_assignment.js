@@ -92,6 +92,26 @@ define([
             .prop('disabled', false);
           return false;
         }
+
+        // If there are restrictions on file type, don't accept submission if the file extension is not allowed
+        if(ENV.SUBMIT_ASSIGNMENT.ALLOWED_EXTENSIONS.length > 0) {
+          var subButton = $(this).find('button[type=submit]');
+          var badExt = false;
+          $.each(uploadedAttachmentIds, function(index, id) {
+            var ext = $("#uploaded_files .file_" + id + " .name").text().split('.').pop().toLowerCase();
+            if ($.inArray(ext, ENV.SUBMIT_ASSIGNMENT.ALLOWED_EXTENSIONS) < 0) {
+              badExt = true;
+              $.flashError(I18n.t('#errors.wrong_file_extension', 'The file you selected with extension "%{extension}", is not authorized for submission', {extension: ext}));
+            }
+          });
+          if(badExt) {
+            subButton
+              .text(I18n.t('#button.submit_assignment', 'Submit Assignment'))
+              .prop('disabled', false);
+            return false;
+          }
+        }
+
         $.ajaxJSONPreparedFiles.call(this, {
           handle_files: function(attachments, data) {
             var ids = (data['submission[attachment_ids]'] || "").split(",");
@@ -110,7 +130,7 @@ define([
           url: $(this).attr('action'),
           success: function(data) {
             submitting = true;
-            window.location = window.location.href.replace(window.location.hash, "");
+            window.location = window.location.href.replace(/\#$/g, "").replace(window.location.hash, "");
           },
           error: function(data) {
             submissionForm.find("button[type='submit']").text(I18n.t('messages.submit_failed', "Submit Failed, please try again"));

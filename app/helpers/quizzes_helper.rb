@@ -427,9 +427,9 @@ module QuizzesHelper
     answer_list.each do |entry|
       entry[:blank_id] = AssessmentQuestion.variable_id(entry[:blank_id])
     end
-
-    res.gsub! %r{<input.*?name=['"](question_.*?)['"].*?/>} do |match|
+    res.gsub! %r{<input.*?name=\\?['"](question_.*?)\\?['"].*?>} do |match|
       blank = match.match(RE_EXTRACT_BLANK_ID).to_a[1]
+      blank.gsub!(/\\/,'')
       answer = answer_list.detect { |entry| entry[:blank_id] == blank } || {}
       answer = h(answer[:answer] || '')
 
@@ -438,11 +438,10 @@ module QuizzesHelper
         #  Replace the {{question_BLAH}} template text with the user's answer text.
         match = match.sub(/\{\{question_.*?\}\}/, answer.to_s).
           # Match on "/>" but only when at the end of the string and insert "readonly" if set to be readonly
-          sub(/\/\>\Z/, readonly_markup)
+          sub(/\/*>\Z/, readonly_markup)
       end
-
       # add labelling to input element regardless
-      match.sub(/\/\>\Z/, "#{label_attr} />")
+      match.sub(/\/*>\Z/, "#{label_attr} />")
     end
 
     if answer_list.empty?
@@ -593,8 +592,13 @@ module QuizzesHelper
     submission && submission.score_before_regrade != submission.kept_score
   end
 
-  def answer_title(selected_answer, correct_answer, show_correct_answers)
+  def answer_title(answer, selected_answer, correct_answer, show_correct_answers)
     titles = []
+
+    if selected_answer || correct_answer || show_correct_answers
+      titles << h("#{answer}.")
+    end
+
     if selected_answer
       titles << I18n.t(:selected_answer, "You selected this answer.")
     end
@@ -603,7 +607,7 @@ module QuizzesHelper
       titles << I18n.t(:correct_answer, "This was the correct answer.")
     end
 
-    title = "title=\"#{titles.join(' ')}\"" if titles.length > 0
+    title = "title=\"#{titles.join(' ')}\"".html_safe if titles.length > 0
   end
 
   def show_correct_answers?(quiz=@quiz, user=@current_user, submission=@submission)

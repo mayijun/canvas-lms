@@ -193,6 +193,24 @@
 #       }
 #     }
 #
+# @model NeedsGradingCount
+#     {
+#       "id": "NeedsGradingCount",
+#       "description": "Used by Assignment model",
+#       "properties": {
+#         "section_id": {
+#           "description": "The section ID",
+#           "example": "123456",
+#           "type": "string"
+#         },
+#         "needs_grading_count": {
+#           "description": "Number of submissions that need grading",
+#           "example": 5,
+#           "type": "integer"
+#         }
+#       }
+#     }
+#
 # @model Assignment
 #     {
 #       "id": "Assignment",
@@ -311,6 +329,15 @@
 #           "description": "if the requesting user has grading rights, the number of submissions that need grading.",
 #           "example": 17,
 #           "type": "integer"
+#         },
+#         "needs_grading_count_by_section": {
+#           "description": "if the requesting user has grading rights and the 'needs_grading_count_by_section' flag is specified, the number of submissions that need grading split out by section. NOTE: This key is NOT present unless you pass the 'needs_grading_count_by_section' argument as true.  ANOTHER NOTE: it's possible to be enrolled in multiple sections, and if a student is setup that way they will show an assignment that needs grading in multiple sections (effectively the count will be duplicated between sections)",
+#           "example": [
+#             {"section_id":"123456","needs_grading_count":5},
+#             {"section_id":"654321","needs_grading_count":0}
+#           ],
+#           "type": "array",
+#           "items": { "$ref": "NeedsGradingCount" }
 #         },
 #         "position": {
 #           "description": "the sorting order of the assignment in the group",
@@ -475,10 +502,12 @@ class AssignmentsApiController < ApplicationController
   # @argument include[] [String, "submission"|"assignment_visibility"]
   #   Associations to include with the assignment. The "assignment_visibility" option
   #   requires that the Differentiated Assignments course feature be turned on.
-  # @argument search_term [Optional, String]
+  # @argument search_term [String]
   #   The partial title of the assignments to match and return.
-  # @argument override_assignment_dates [Optional, Boolean]
+  # @argument override_assignment_dates [Boolean]
   #   Apply assignment overrides for each assignment, defaults to true.
+  # @argument needs_grading_count_by_section [Boolean]
+  #   Split up "needs_grading_count" by sections into the "needs_grading_count_by_section" key, defaults to false
   # @returns [Assignment]
   def index
     if authorized_action(@context, @current_user, :read)
@@ -497,6 +526,10 @@ class AssignmentsApiController < ApplicationController
         scope = scope.published
       end
 
+      if da_enabled = @context.feature_enabled?(:differentiated_assignments)
+        scope = DifferentiableAssignment.scope_filter(scope, @current_user, @context)
+      end
+
       assignments = Api.paginate(scope, self, api_v1_course_assignments_url(@context))
 
       if Array(params[:include]).include?('submission')
@@ -513,18 +546,28 @@ class AssignmentsApiController < ApplicationController
       override_param = params[:override_assignment_dates] || true
       override_dates = value_to_boolean(override_param)
       if override_dates
-        Assignment.send(:preload_associations, assignments, :assignment_overrides)
+        ActiveRecord::Associations::Preloader.new(assignments, :assignment_overrides).run
         assignments.select{ |a| a.assignment_overrides.size == 0 }.
           each { |a| a.has_no_overrides = true }
       end
 
-      include_visibility = Array(params[:include]).include?('assignment_visibility')
+      include_visibility = Array(params[:include]).include?('assignment_visibility') && @context.grants_any_right?(@current_user, :read_as_admin, :manage_grades, :manage_assignments)
+
+      if include_visibility && da_enabled
+        assignment_visibilities = AssignmentStudentVisibility.users_with_visibility_by_assignment(course_id: @context.id, assignment_id: assignments.map(&:id))
+      end
+
+      needs_grading_by_section_param = params[:needs_grading_count_by_section] || false
+      needs_grading_count_by_section = value_to_boolean(needs_grading_by_section_param)
 
       hashes = assignments.map do |assignment|
+        visibility_array = assignment_visibilities[assignment.id] if assignment_visibilities
         submission = submissions[assignment.id]
         assignment_json(assignment, @current_user, session,
                         submission: submission, override_dates: override_dates,
-                        include_visibility: include_visibility)
+                        include_visibility: include_visibility,
+                        assignment_visibilities: visibility_array,
+                        needs_grading_count_by_section: needs_grading_count_by_section)
       end
 
       render :json => hashes
@@ -536,27 +579,35 @@ class AssignmentsApiController < ApplicationController
   # @argument include[] [String, "submission"|"assignment_visibility"]
   #   Associations to include with the assignment. The "assignment_visibility" option
   #   requires that the Differentiated Assignments course feature be turned on.
-  # @argument override_assignment_dates [Optional, Boolean]
+  # @argument override_assignment_dates [Boolean]
   #   Apply assignment overrides to the assignment, defaults to true.
+  # @argument needs_grading_count_by_section [Boolean]
+  #   Split up "needs_grading_count" by sections into the "needs_grading_count_by_section" key, defaults to false
   # @returns Assignment
   def show
     @assignment = @context.active_assignments.find(params[:id],
         :include => [:assignment_group, :rubric_association, :rubric])
     if authorized_action(@assignment, @current_user, :read)
+      return render_unauthorized_action unless @assignment.visible_to_user?(@current_user)
+
       if Array(params[:include]).include?('submission')
         submission = @assignment.submissions.for_user(@current_user).first
       end
 
-      include_visibility = Array(params[:include]).include?('assignment_visibility')
+      include_visibility = Array(params[:include]).include?('assignment_visibility') && @context.grants_any_right?(@current_user, :read_as_admin, :manage_grades, :manage_assignments)
 
       override_param = params[:override_assignment_dates] || true
       override_dates = value_to_boolean(override_param)
 
+      needs_grading_by_section_param = params[:needs_grading_count_by_section] || false
+      needs_grading_count_by_section = value_to_boolean(needs_grading_by_section_param)
+
       @assignment.context_module_action(@current_user, :read) unless @assignment.locked_for?(@current_user, :check_policies => true)
       render :json => assignment_json(@assignment, @current_user, session,
-                                      submission: submission,
-                                      override_dates: override_dates,
-                                      include_visibility: include_visibility)
+                  submission: submission,
+                  override_dates: override_dates,
+                  include_visibility: include_visibility,
+                  needs_grading_count_by_section: needs_grading_count_by_section)
     end
   end
 
@@ -564,9 +615,9 @@ class AssignmentsApiController < ApplicationController
   # Create a new assignment for this course. The assignment is created in the
   # active state.
   #
-  # @argument assignment[name] [String] The assignment name.
+  # @argument assignment[name] [Required, String] The assignment name.
   #
-  # @argument assignment[position] [Optional, Integer]
+  # @argument assignment[position] [Integer]
   #   The position of this assignment in the group when displaying
   #   assignment lists.
   #
@@ -591,53 +642,53 @@ class AssignmentsApiController < ApplicationController
   #     "online_url"
   #     "media_recording" (Only valid when the Kaltura plugin is enabled)
   #
-  # @argument assignment[allowed_extensions][] [Optional, String]
+  # @argument assignment[allowed_extensions][] [String]
   #   Allowed extensions if submission_types includes "online_upload"
   #
   #   Example:
   #     allowed_extensions: ["docx","ppt"]
   #
-  # @argument assignment[turnitin_enabled] [Optional, Boolean]
+  # @argument assignment[turnitin_enabled] [Boolean]
   #   Only applies when the Turnitin plugin is enabled for a course and
   #   the submission_types array includes "online_upload".
   #   Toggles Turnitin submissions for the assignment.
   #   Will be ignored if Turnitin is not available for the course.
   #
-  # @argument assignment[turnitin_settings] [Optional]
+  # @argument assignment[turnitin_settings]
   #   Settings to send along to turnitin. See Assignment object definition for
   #   format.
   #
-  # @argument assignment[integration_data] [Optional]
+  # @argument assignment[integration_data]
   #   Data related to third party integrations, JSON string required.
   #
-  # @argument assignment[integration_id] [Optional]
+  # @argument assignment[integration_id]
   #   Unique ID from third party integrations
   #
-  # @argument assignment[peer_reviews] [Optional, Boolean]
+  # @argument assignment[peer_reviews] [Boolean]
   #   If submission_types does not include external_tool,discussion_topic,
   #   online_quiz, or on_paper, determines whether or not peer reviews
   #   will be turned on for the assignment.
   #
-  # @argument assignment[automatic_peer_reviews] [Optional, Boolean]
+  # @argument assignment[automatic_peer_reviews] [Boolean]
   #   Whether peer reviews will be assigned automatically by Canvas or if
   #   teachers must manually assign peer reviews. Does not apply if peer reviews
   #   are not enabled.
   #
-  # @argument assignment[notify_of_update] [Optional, Boolean]
+  # @argument assignment[notify_of_update] [Boolean]
   #   If true, Canvas will send a notification to students in the class
   #   notifying them that the content has changed.
   #
-  # @argument assignment[group_category_id] [Optional, Integer]
+  # @argument assignment[group_category_id] [Integer]
   #   If present, the assignment will become a group assignment assigned
   #   to the group.
   #
-  # @argument assignment[grade_group_students_individually] [Optional, Integer]
+  # @argument assignment[grade_group_students_individually] [Integer]
   #   If this is a group assignment, teachers have the options to grade
   #   students individually. If false, Canvas will apply the assignment's
   #   score to each member of the group. If true, the teacher can manually
   #   assign scores to each member of the group.
   #
-  # @argument assignment[external_tool_tag_attributes] [Optional]
+  # @argument assignment[external_tool_tag_attributes]
   #   Hash of attributes if submission_types is ["external_tool"]
   #   Example:
   #     external_tool_tag_attributes: {
@@ -647,52 +698,52 @@ class AssignmentsApiController < ApplicationController
   #       new_tab: false
   #     }
   #
-  # @argument assignment[points_possible] [Optional, Float]
+  # @argument assignment[points_possible] [Float]
   #   The maximum points possible on the assignment.
   #
-  # @argument assignment[grading_type] [Optional, "pass_fail"|"percent"|"letter_grade"|"gpa_scale"|"points"]
+  # @argument assignment[grading_type] ["pass_fail"|"percent"|"letter_grade"|"gpa_scale"|"points"]
   #  The strategy used for grading the assignment.
   #  The assignment is ungraded if this field is omitted.
   #
-  # @argument assignment[due_at] [Optional, Timestamp]
+  # @argument assignment[due_at] [Timestamp]
   #   The day/time the assignment is due.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
-  # @argument assignment[lock_at] [Optional, Timestamp]
+  # @argument assignment[lock_at] [Timestamp]
   #   The day/time the assignment is locked after.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
-  # @argument assignment[unlock_at] [Optional, Timestamp]
+  # @argument assignment[unlock_at] [Timestamp]
   #   The day/time the assignment is unlocked.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
-  # @argument assignment[description] [Optional, String]
+  # @argument assignment[description] [String]
   #   The assignment's description, supports HTML.
   #
-  # @argument assignment[assignment_group_id] [Optional, Integer]
+  # @argument assignment[assignment_group_id] [Integer]
   #   The assignment group id to put the assignment in.
   #   Defaults to the top assignment group in the course.
   #
-  # @argument assignment[muted] [Optional, Boolean]
+  # @argument assignment[muted] [Boolean]
   #   Whether this assignment is muted.
   #   A muted assignment does not send change notifications
   #   and hides grades from students.
   #   Defaults to false.
   #
-  # @argument assignment[assignment_overrides][] [Optional, AssignmentOverride]
+  # @argument assignment[assignment_overrides][] [AssignmentOverride]
   #   List of overrides for the assignment.
   #   NOTE: The assignment overrides feature is in beta.
   #
-  # @argument assignment[only_visible_to_overrides] [Optional, Boolean]
+  # @argument assignment[only_visible_to_overrides] [Boolean]
   #   Whether this assignment is only visible to overrides
   #   (Only useful if 'differentiated assignments' account setting is on)
   #
-  # @argument assignment[published] [Optional, Boolean]
+  # @argument assignment[published] [Boolean]
   #   Whether this assignment is published.
   #   (Only useful if 'draft state' account setting is on)
   #   Unpublished assignments are not visible to students.
   #
-  # @argument assignment[grading_standard_id] [Optional, Integer]
+  # @argument assignment[grading_standard_id] [Integer]
   #   The grading standard id to set for the course.  If no value is provided for this argument the current grading_standard will be un-set from this course.
   #   This will update the grading_type for the course to 'letter_grade' unless it is already 'gpa_scale'.
   #
@@ -708,13 +759,13 @@ class AssignmentsApiController < ApplicationController
   # @API Edit an assignment
   # Modify an existing assignment.
   #
-  # @argument assignment[name] [Optional, String] The assignment name.
+  # @argument assignment[name] [String] The assignment name.
   #
-  # @argument assignment[position] [Optional, Integer]
+  # @argument assignment[position] [Integer]
   #   The position of this assignment in the group when displaying
   #   assignment lists.
   #
-  # @argument assignment[submission_types][] [Optional, String, "online_quiz"|"none"|"on_paper"|"online_quiz"|"discussion_topic"|"external_tool"|"online_upload"|"online_text_entry"|"online_url"|"media_recording"]
+  # @argument assignment[submission_types][] [String, "online_quiz"|"none"|"on_paper"|"online_quiz"|"discussion_topic"|"external_tool"|"online_upload"|"online_text_entry"|"online_url"|"media_recording"]
   #   List of supported submission types for the assignment.
   #   Unless the assignment is allowing online submissions, the array should
   #   only have one element.
@@ -735,53 +786,53 @@ class AssignmentsApiController < ApplicationController
   #     "online_url"
   #     "media_recording" (Only valid when the Kaltura plugin is enabled)
   #
-  # @argument assignment[allowed_extensions][] [Optional, String]
+  # @argument assignment[allowed_extensions][] [String]
   #   Allowed extensions if submission_types includes "online_upload"
   #
   #   Example:
   #     allowed_extensions: ["docx","ppt"]
   #
-  # @argument assignment[turnitin_enabled] [Optional, Boolean]
+  # @argument assignment[turnitin_enabled] [Boolean]
   #   Only applies when the Turnitin plugin is enabled for a course and
   #   the submission_types array includes "online_upload".
   #   Toggles Turnitin submissions for the assignment.
   #   Will be ignored if Turnitin is not available for the course.
   #
-  # @argument assignment[turnitin_settings] [Optional]
+  # @argument assignment[turnitin_settings]
   #   Settings to send along to turnitin. See Assignment object definition for
   #   format.
   #
-  # @argument assignment[integration_data] [Optional]
+  # @argument assignment[integration_data]
   #   Data related to third party integrations, JSON string required.
   #
-  # @argument assignment[integration_id] [Optional]
+  # @argument assignment[integration_id]
   #   Unique ID from third party integrations
   #
-  # @argument assignment[peer_reviews] [Optional, Boolean]
+  # @argument assignment[peer_reviews] [Boolean]
   #   If submission_types does not include external_tool,discussion_topic,
   #   online_quiz, or on_paper, determines whether or not peer reviews
   #   will be turned on for the assignment.
   #
-  # @argument assignment[automatic_peer_reviews] [Optional, Boolean]
+  # @argument assignment[automatic_peer_reviews] [Boolean]
   #   Whether peer reviews will be assigned automatically by Canvas or if
   #   teachers must manually assign peer reviews. Does not apply if peer reviews
   #   are not enabled.
   #
-  # @argument assignment[notify_of_update] [Optional, Boolean]
+  # @argument assignment[notify_of_update] [Boolean]
   #   If true, Canvas will send a notification to students in the class
   #   notifying them that the content has changed.
   #
-  # @argument assignment[group_category_id] [Optional, Integer]
+  # @argument assignment[group_category_id] [Integer]
   #   If present, the assignment will become a group assignment assigned
   #   to the group.
   #
-  # @argument assignment[grade_group_students_individually] [Optional, Integer]
+  # @argument assignment[grade_group_students_individually] [Integer]
   #   If this is a group assignment, teachers have the options to grade
   #   students individually. If false, Canvas will apply the assignment's
   #   score to each member of the group. If true, the teacher can manually
   #   assign scores to each member of the group.
   #
-  # @argument assignment[external_tool_tag_attributes] [Optional]
+  # @argument assignment[external_tool_tag_attributes]
   #   Hash of attributes if submission_types is ["external_tool"]
   #   Example:
   #     external_tool_tag_attributes: {
@@ -791,52 +842,52 @@ class AssignmentsApiController < ApplicationController
   #       new_tab: false
   #     }
   #
-  # @argument assignment[points_possible] [Optional, Float]
+  # @argument assignment[points_possible] [Float]
   #   The maximum points possible on the assignment.
   #
-  # @argument assignment[grading_type] [Optional, "pass_fail"|"percent"|"letter_grade"|"gpa_scale"|"points"]
+  # @argument assignment[grading_type] ["pass_fail"|"percent"|"letter_grade"|"gpa_scale"|"points"]
   #  The strategy used for grading the assignment.
   #  The assignment is ungraded if this field is omitted.
   #
-  # @argument assignment[due_at] [Optional, Timestamp]
+  # @argument assignment[due_at] [Timestamp]
   #   The day/time the assignment is due.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
-  # @argument assignment[lock_at] [Optional, Timestamp]
+  # @argument assignment[lock_at] [Timestamp]
   #   The day/time the assignment is locked after.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
-  # @argument assignment[unlock_at] [Optional, Timestamp]
+  # @argument assignment[unlock_at] [Timestamp]
   #   The day/time the assignment is unlocked.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
-  # @argument assignment[description] [Optional, String]
+  # @argument assignment[description] [String]
   #   The assignment's description, supports HTML.
   #
-  # @argument assignment[assignment_group_id] [Optional, Integer]
+  # @argument assignment[assignment_group_id] [Integer]
   #   The assignment group id to put the assignment in.
   #   Defaults to the top assignment group in the course.
   #
-  # @argument assignment[muted] [Optional, Boolean]
+  # @argument assignment[muted] [Boolean]
   #   Whether this assignment is muted.
   #   A muted assignment does not send change notifications
   #   and hides grades from students.
   #   Defaults to false.
   #
-  # @argument assignment[assignment_overrides][] [Optional, AssignmentOverride]
+  # @argument assignment[assignment_overrides][] [AssignmentOverride]
   #   List of overrides for the assignment.
   #   NOTE: The assignment overrides feature is in beta.
   #
-  # @argument assignment[only_visible_to_overrides] [Optional, Boolean]
+  # @argument assignment[only_visible_to_overrides] [Boolean]
   #   Whether this assignment is only visible to overrides
   #   (Only useful if 'differentiated assignments' account setting is on)
   #
-  # @argument assignment[published] [Optional, Boolean]
+  # @argument assignment[published] [Boolean]
   #   Whether this assignment is published.
   #   (Only useful if 'draft state' account setting is on)
   #   Unpublished assignments are not visible to students.
   #
-  # @argument assignment[grading_standard_id] [Optional, Integer]
+  # @argument assignment[grading_standard_id] [Integer]
   #   The grading standard id to set for the course.  If no value is provided for this argument the current grading_standard will be un-set from this course.
   #   This will update the grading_type for the course to 'letter_grade' unless it is already 'gpa_scale'.
   #
