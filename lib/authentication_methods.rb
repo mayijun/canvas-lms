@@ -85,12 +85,13 @@ module AuthenticationMethods
 
   def load_user
     @current_user = @current_pseudonym = nil
+    CanvasBreachMitigation::MaskingSecrets.masked_authenticity_token(cookies) # ensure that the cookie is set
 
     load_pseudonym_from_access_token
 
     if !@current_pseudonym
       if @policy_pseudonym_id
-        @current_pseudonym = Pseudonym.find_by_id(@policy_pseudonym_id)
+        @current_pseudonym = Pseudonym.where(id: @policy_pseudonym_id).first
       elsif @pseudonym_session = PseudonymSession.find
         @current_pseudonym = @pseudonym_session.record
 
@@ -112,6 +113,20 @@ module AuthenticationMethods
           end
         end
       end
+
+      if @current_pseudonym &&
+         session[:cas_session] &&
+         @current_pseudonym.cas_ticket_expired?(session[:cas_session]) &&
+         @domain_root_account.cas_authentication?
+
+        destroy_session
+        @current_pseudonym = nil
+
+        raise LoggedOutError if api_request? || request.format.json?
+
+        redirect_to_login
+      end
+
       if params[:login_success] == '1' && !@current_pseudonym
         # they just logged in successfully, but we can't find the pseudonym now?
         # sounds like somebody hates cookies.
@@ -124,13 +139,13 @@ module AuthenticationMethods
         # just using an app session
         # this basic auth support is deprecated and marked for removal in 2012
         if @pseudonym_session.try(:used_basic_auth?) && params[:api_key].present?
-          Shard.birth.activate { @developer_key = DeveloperKey.find_by_api_key(params[:api_key]) }
+          Shard.birth.activate { @developer_key = DeveloperKey.where(api_key: params[:api_key]).first }
         end
         @developer_key ||
           request.get? ||
           !allow_forgery_protection ||
-          CanvasBreachMitigation::MaskingSecrets.valid_authenticity_token?(session, form_authenticity_param) ||
-          CanvasBreachMitigation::MaskingSecrets.valid_authenticity_token?(session, request.headers['X-CSRF-Token']) ||
+          CanvasBreachMitigation::MaskingSecrets.valid_authenticity_token?(session, cookies, form_authenticity_param) ||
+          CanvasBreachMitigation::MaskingSecrets.valid_authenticity_token?(session, cookies, request.headers['X-CSRF-Token']) ||
           raise(AccessTokenError)
       end
     end
@@ -146,7 +161,7 @@ module AuthenticationMethods
     if @current_user && %w(become_user_id me become_teacher become_student).any? { |k| params.key?(k) }
       request_become_user = nil
       if params[:become_user_id]
-        request_become_user = User.find_by_id(params[:become_user_id])
+        request_become_user = User.where(id: params[:become_user_id]).first
       elsif params.keys.include?('me')
         request_become_user = @current_user
       elsif params.keys.include?('become_teacher')

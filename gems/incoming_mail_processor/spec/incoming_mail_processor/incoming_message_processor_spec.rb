@@ -128,7 +128,7 @@ describe IncomingMailProcessor::IncomingMessageProcessor do
 
   describe "#process_single" do
     it "should not choke on invalid UTF-8" do
-      IncomingMessageProcessor.new(message_handler, error_reporter).process_single(Mail.new { body "he\xffllo" }, '')
+      IncomingMessageProcessor.new(message_handler, error_reporter).process_single(Mail.new { body "he\xffllo".force_encoding(Encoding::BINARY) }, '')
 
       message_handler.body.should == "hello"
       message_handler.html_body.should == "hello"
@@ -137,7 +137,7 @@ describe IncomingMailProcessor::IncomingMessageProcessor do
     it "should convert another charset to UTF-8" do
       IncomingMessageProcessor.new(message_handler, error_reporter).process_single(Mail.new {
           content_type 'text/plain; charset=Shift-JIS'
-          body "\x83\x40"
+          body "\x83\x40".force_encoding(Encoding::BINARY)
         }, '')
 
       comparison_string = "\xe3\x82\xa1"
@@ -168,9 +168,11 @@ describe IncomingMailProcessor::IncomingMessageProcessor do
 
       IncomingMessageProcessor.new(message_handler, error_reporter).process_single(incoming_bounce_message, '')
     end
-  end
 
-  describe "#process_single__CNVS-5873" do
+    it "works with multipart emails with no html part" do
+      test_message('multipart_mixed_no_html_part.eml')
+    end
+
     it "should be able to extract text and html bodies from nested_multipart_sample.eml" do
       test_message('nested_multipart_sample.eml')
     end

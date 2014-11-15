@@ -1,4 +1,3 @@
-# In rails 3.2, this calls MultiJson.use(:oj)
 ActiveSupport::JSON.backend = :oj
 MultiJson.dump_options = {:escape_mode => :xss_safe}
 

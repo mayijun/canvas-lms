@@ -39,7 +39,7 @@ module Lti
       variable_substitutor = LtiOutbound::VariableSubstitutor.new
 
       lti_context = Lti::LtiContextCreator.new(@context, @tool).convert
-      lti_user = Lti::LtiUserCreator.new(@user, @root_account, @tool, @context, variable_substitutor).convert
+      lti_user = Lti::LtiUserCreator.new(@user, @root_account, @tool, @context, variable_substitutor).convert if @user
       lti_tool = Lti::LtiToolCreator.new(@tool).convert
       lti_account = Lti::LtiAccountCreator.new(@context, @tool).convert
 
@@ -55,6 +55,9 @@ module Lti
         variable_substitutor.add_substitution('$Canvas.course.id', lti_context.id)
         variable_substitutor.add_substitution('$Canvas.course.sisSourceId', lti_context.sis_source_id)
       end
+      # temporary until lti 2 infrastructure is in place
+      lti_helper = Lti::SubstitutionsHelper.new(@context, @root_account, @user)
+      variable_substitutor.add_substitution('$Canvas.xuser.allRoles', lti_helper.all_roles)
 
       if opts[:custom_substitutions]
         opts[:custom_substitutions].each do |key, value|
@@ -81,26 +84,26 @@ module Lti
     end
 
     def generate_post_payload
-      raise('Called generate_post_payload before calling prepared_tool_launch') unless @tool_launch
+      raise('Called generate_post_payload before calling prepare_tool_launch') unless @tool_launch
       @tool_launch.generate(@overrides)
     end
 
     def generate_post_payload_for_assignment(assignment, outcome_service_url, legacy_outcome_service_url)
-      raise('Called generate_post_payload_for_assignment before calling generate_post_payload_for_assignment') unless @tool_launch
+      raise('Called generate_post_payload_for_assignment before calling prepare_tool_launch') unless @tool_launch
       lti_assignment = Lti::LtiAssignmentCreator.new(assignment, encode_source_id(assignment)).convert
       @tool_launch.for_assignment!(lti_assignment, outcome_service_url, legacy_outcome_service_url)
       generate_post_payload
     end
 
     def generate_post_payload_for_homework_submission(assignment)
-      raise('Called generate_post_payload_for_homework_submission before calling generate_post_payload_for_assignment') unless @tool_launch
+      raise('Called generate_post_payload_for_homework_submission before calling prepare_tool_launch') unless @tool_launch
       lti_assignment = Lti::LtiAssignmentCreator.new(assignment).convert
       @tool_launch.for_homework_submission!(lti_assignment)
       generate_post_payload
     end
 
     def launch_url
-      raise('Called launch_url before calling prepared_tool_launch') unless @tool_launch
+      raise('Called launch_url before calling prepare_tool_launch') unless @tool_launch
       @tool_launch.url
     end
 
@@ -121,7 +124,7 @@ module Lti
     def encode_source_id(assignment)
       @tool.shard.activate do
         payload = [@tool.id, @context.id, assignment.id, @user.id].join('-')
-        "#{payload}-#{Canvas::Security.hmac_sha1(payload, @tool.shard.settings[:encryption_key])}"
+        "#{payload}-#{Canvas::Security.hmac_sha1(payload)}"
       end
     end
   end

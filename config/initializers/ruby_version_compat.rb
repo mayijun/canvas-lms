@@ -68,41 +68,52 @@ class ActionController::Base
   before_filter :force_utf8_params
 end
 
-class ActiveRecord::Base
-  # this is basically all potentially affected AR serialized columns that
-  # existed in the DB before Canvas was Ruby 1.9 only. We've verified that
-  # none of these columns should legitimately contain binary data, only text.
-  SERIALIZED_COLUMNS_WITH_POTENTIALLY_INVALID_UTF8 = {
-    'AssessmentQuestion'                => %w[question_data],
-    'ContextExternalTool'               => %w[settings],
-    'EportfolioEntry'                   => %w[content],
-    'ErrorReport'                       => %w[http_env data],
-    'LearningOutcome'                   => %w[data],
-    'Profile'                           => %w[data],
-    'Quizzes::Quiz'                     => %w[quiz_data],
-    'Quizzes::QuizQuestion'             => %w[question_data],
-    'Quizzes::QuizSubmission'           => %w[quiz_data submission_data],
-    'Quizzes::QuizSubmissionSnapshot'   => %w[data],
-    'Rubric'                            => %w[data],
-    'RubricAssessment'                  => %w[data],
-    'SisBatch'                          => %w[processing_errors processing_warnings],
-    'StreamItem'                        => %w[data]
-  }
+if CANVAS_RAILS3
+  module HandleInvalidUtf8
+    # this is basically all potentially affected AR serialized columns that
+    # existed in the DB before Canvas was Ruby 1.9 only. We've verified that
+    # none of these columns should legitimately contain binary data, only text.
+    SERIALIZED_COLUMNS_WITH_POTENTIALLY_INVALID_UTF8 = {
+      'AssessmentQuestion'                => %w[question_data],
+      'ContextExternalTool'               => %w[settings],
+      'EportfolioEntry'                   => %w[content],
+      'ErrorReport'                       => %w[http_env data],
+      'LearningOutcome'                   => %w[data],
+      'Profile'                           => %w[data],
+      'Quizzes::Quiz'                     => %w[quiz_data],
+      'Quizzes::QuizQuestion'             => %w[question_data],
+      'Quizzes::QuizSubmission'           => %w[quiz_data submission_data],
+      'Quizzes::QuizSubmissionSnapshot'   => %w[data],
+      'Rubric'                            => %w[data],
+      'RubricAssessment'                  => %w[data],
+      'SisBatch'                          => %w[processing_errors processing_warnings],
+      'StreamItem'                        => %w[data]
+    }
 
-  class << self
-    def strip_invalid_utf8_from_attribute(attr_name, value)
+    def attribute_cast_code(attr_name)
       if SERIALIZED_COLUMNS_WITH_POTENTIALLY_INVALID_UTF8[self.name].try(:include?, attr_name.to_s)
-        Utf8Cleaner.recursively_strip_invalid_utf8!(value, true)
+        "Utf8Cleaner.recursively_strip_invalid_utf8!(#{super}, true)"
+      else
+        super
       end
-      value
     end
-
-    def type_cast_attribute_with_utf8_check(attr_name, attributes, cache={})
-      value = type_cast_attribute_without_utf8_check(attr_name, attributes, cache)
-      strip_invalid_utf8_from_attribute(attr_name, value)
-    end
-    alias_method_chain :type_cast_attribute, :utf8_check
   end
+
+  class ActiveRecord::Base
+    extend HandleInvalidUtf8
+  end
+else
+  # For Rails 4 use Custom Types
+  # https://github.com/rails/rails/blob/08754f12e65a9ec79633a605e986d0f1ffa4b251/activerecord/lib/active_record/attributes.rb#L53?line=53
+end
+
+unless CANVAS_RAILS3
+  module AttributeReadWithUtf8Check
+    def read_attribute(attr_name, &block)
+      self.class.strip_invalid_utf8_from_attribute(attr_name, super)
+    end
+  end
+  ActiveRecord::AttributeMethods::Read.send(:prepend, AttributeReadWithUtf8Check)
 end
 
 # Fix for https://bugs.ruby-lang.org/issues/7278 , which was filling up our logs with these warnings

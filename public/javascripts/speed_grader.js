@@ -18,6 +18,7 @@
 
 define([
   'jst/speed_grader/submissions_dropdown',
+  'jst/speed_grader/speech_recognition',
   'compiled/util/round',
   'underscore',
   'INST' /* INST */,
@@ -48,10 +49,9 @@ define([
   'vendor/jquery.getScrollbarWidth' /* getScrollbarWidth */,
   'vendor/jquery.scrollTo' /* /\.scrollTo/ */,
   'vendor/jquery.spin' /* /\.spin/ */,
-  'vendor/scribd.view' /* scribd */,
   'vendor/spin' /* new Spinner */,
   'vendor/ui.selectmenu' /* /\.selectmenu/ */
-], function(submissionsDropdownTemplate, round, _, INST, I18n, $, tz, userSettings, htmlEscape, rubricAssessment, turnitinInfoTemplate, turnitinScoreTemplate) {
+], function(submissionsDropdownTemplate, speechRecognitionTemplate, round, _, INST, I18n, $, tz, userSettings, htmlEscape, rubricAssessment, turnitinInfoTemplate, turnitinScoreTemplate) {
 
   // fire off the request to get the jsonData
   window.jsonData = {};
@@ -130,7 +130,8 @@ define([
       studentLabel = I18n.t("student", "Student"),
       groupLabel = I18n.t("group", "Group"),
       gradeeLabel = studentLabel,
-      utils;
+      utils,
+      crocodocSessionTimer;
 
   utils = {
     getParam: function(name){
@@ -517,28 +518,126 @@ define([
 
     // handle speech to text for browsers that can (right now only chrome)
     function browserSupportsSpeech(){
-      var elem = document.createElement('input');
-      // chrome 10 advertises support but it LIES!!! doesn't work till chrome 11
-      var support = ('onwebkitspeechchange' in elem || 'speech' in elem) && !navigator.appVersion.match(/Chrome\/10/);
-      return support;
+      return 'webkitSpeechRecognition' in window;
     }
-    if (browserSupportsSpeech()) {
-      $(".speech_recognition_link").click(function() {
-          $('<input style="font-size: 30px;" speech x-webkit-speech />')
-            .dialog({
-              title: I18n.t('titles.click_to_record', "Click the mic to record your comments"),
-              open: function(){
-                $(this).width(100);
+    if (browserSupportsSpeech()){
+      var recognition = new webkitSpeechRecognition();
+      var messages = {
+        "begin": I18n.t('begin_record_prompt', 'Click the "Record" button to begin.'),
+        "allow": I18n.t('allow_message', 'Click the "Allow" button to begin recording.'),
+        "recording": I18n.t('recording_message', 'Recording...'),
+        "recording_expired": I18n.t('recording_expired_message', 'Speech recognition has expired due to inactivity. Click the "Stop" button to use current text for comment or "Cancel" to discard.'),
+        "mic_blocked": I18n.t('mic_blocked_message', 'Permission to use microphone is blocked. To change, go to chrome://settings/contentExceptions#media-stream'),
+        "no_speech": I18n.t('nodetect_message', 'No speech was detected. You may need to adjust your microphone settings.')
+      }
+      configureRecognition(recognition);
+      $(".speech_recognition_link").click(function(){
+        $(speechRecognitionTemplate({
+          message: messages.begin
+        }))
+          .dialog({
+            title: I18n.t('titles.click_to_record', "Speech to Text"),
+            minWidth: 450,
+            minHeight: 200,
+            dialogClass: "no-close",
+            buttons: [{
+              'class': 'dialog_button',
+              text: I18n.t('buttons.dialog_buttons', "Cancel"),
+              click: function(){
+                recognition.stop();
+                $(this).dialog('close').remove();
               }
-            })
-            .bind('webkitspeechchange', function(){
-              $add_a_comment_textarea.val($(this).val());
+            },
+            {
+              id: 'record_button',
+              'class': 'dialog_button',
+              'aria-label': I18n.t('dialog_button.aria_record', "Click to record"),
+              recording: false,
+              html: "<div></div>",
+              click: function(){
+                var $this = $(this)
+                processSpeech($this);
+              }
+            }],
+            close: function(){
+              recognition.stop();
               $(this).dialog('close').remove();
-            });
-          return false;
-        })
+            }
+          })
+        return false;
+      })
         // show the li that contains the button because it is hidden from browsers that dont support speech
-        .closest('li').show();
+      .closest('li').show();
+
+      function processSpeech($this){
+        if ($('#record_button').attr("recording") == "true"){
+          recognition.stop();
+          var current_comment = $('#final_results').html() + $('#interim_results').html()
+          $add_a_comment_textarea.val(formatComment(current_comment));
+          $this.dialog('close').remove();
+        }
+        else {
+          recognition.start();
+          $('#dialog_message').text(messages.allow)
+        }
+      }
+
+      function formatComment(current_comment){
+        return current_comment.replace(/<p><\/p>/g, '\n\n').replace(/<br>/g, '\n');
+      }
+
+      function configureRecognition(recognition){
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        var final_transcript = '';
+
+        recognition.onstart = function(){
+          $('#dialog_message').text(messages.recording);
+          $('#record_button').attr("recording", true).attr("aria-label", I18n.t('dialog_button.aria_stop', 'Hit "Stop" to end recording.'))
+        }
+
+        recognition.onresult = function(event){
+          var interim_transcript = '';
+          for (var i = event.resultIndex; i < event.results.length; i++){
+            if (event.results[i].isFinal){
+              final_transcript += event.results[i][0].transcript;
+              $('#final_results').html(linebreak(final_transcript))
+            }
+            else {
+              interim_transcript += event.results[i][0].transcript;
+            }
+            $('#interim_results').html(linebreak(interim_transcript))
+          }
+        }
+
+        recognition.onaudiostart = function(event){
+          //this call is required for onaudioend event to trigger
+        }
+
+        recognition.onaudioend = function(event){
+          if ($('#final_results').text() != '' || $('#interim_results').text() != ''){
+            $('#dialog_message').text(messages.recording_expired);
+          }
+        }
+
+        recognition.onend = function(event){
+          final_transcript = '';
+        }
+
+        recognition.onerror = function(event){
+          if (event.error == 'not-allowed') {
+            $('#dialog_message').text(messages.mic_blocked);
+          }
+          else if (event.error = 'no-speech'){
+            $('#dialog_message').text(messages.no_speech);
+          }
+          $('#record_button').attr("recording", false).attr("aria-label", I18n.t('dialog_button.aria_record_reset', "Click to record"));
+        }
+
+        function linebreak(transcript){
+          return transcript.replace(/\n\n/g, '<p></p>').replace(/\n/g, '<br>');
+        }
+      }
     }
   }
 
@@ -821,7 +920,6 @@ define([
   var EG = {
     options: {},
     publicVariable: [],
-    scribdDoc: null,
     currentStudent: null,
 
     domReady: function(){
@@ -1115,6 +1213,7 @@ define([
     },
 
     handleSubmissionSelectionChange: function(){
+      clearInterval(crocodocSessionTimer);
       try {
         var $submission_to_view = $("#submission_to_view");
         var submissionToViewVal = $submission_to_view.val(),
@@ -1154,7 +1253,6 @@ define([
           var attachment = a.attachment;
           if (attachment.crocodoc_url ||
               attachment.canvadoc_url ||
-              (attachment.scribd_doc && attachment.scribd_doc.created) ||
               $.isPreviewable(attachment.content_type, 'google')) {
             inlineableAttachments.push(attachment);
           }
@@ -1316,6 +1414,7 @@ define([
     },
 
     loadAttachmentInline: function(attachment){
+      clearInterval(crocodocSessionTimer);
       $submissions_container.children().hide();
       $no_annotation_warning.hide();
       if (!this.currentStudent.submission || !this.currentStudent.submission.submission_type || this.currentStudent.submission.workflow_state == 'unsubmitted') {
@@ -1326,7 +1425,6 @@ define([
         $iframe_holder.empty();
 
         if (attachment) {
-          var scribdDocAvailable = attachment.scribd_doc && attachment.scribd_doc.created && attachment.workflow_state != 'errored' && attachment.scribd_doc.attributes.doc_id;
           var previewOptions = {
             height: '100%',
             mimeType: attachment.content_type,
@@ -1334,13 +1432,30 @@ define([
             submission_id: this.currentStudent.submission.id,
             attachment_view_inline_ping_url: attachment.view_inline_ping_url,
             attachment_preview_processing: attachment.workflow_state == 'pending_upload' || attachment.workflow_state == 'processing',
-            attachment_scribd_render_url: attachment.scribd_render_url,
             ready: function(){
               EG.resizeFullHeight();
             }
           };
         }
         if (attachment && attachment.crocodoc_url) {
+          var crocodocStart = new Date()
+          ,   sessionLimit = 60 * 60 * 1000
+          ,   aggressiveWarnings = [50 * 60 * 1000,
+                                    55 * 60 * 1000,
+                                    58 * 60 * 1000,
+                                    59 * 60 * 1000];
+          crocodocSessionTimer = window.setInterval(function() {
+            var elapsed = new Date() - crocodocStart;
+            if (elapsed > sessionLimit) {
+              window.location.reload();
+            } else if (elapsed > aggressiveWarnings[0]) {
+              alert(I18n.t("crocodoc_expiring",
+                           "Your Crocodoc session is expiring soon.  Please reload " +
+                           "the window to avoid losing any work."));
+              aggressiveWarnings.shift();
+            }
+          }, 1000);
+
           $iframe_holder.show().loadDocPreview($.extend(previewOptions, {
             crocodoc_session_url: attachment.crocodoc_url
           }));
@@ -1350,15 +1465,9 @@ define([
             canvadoc_session_url: attachment.canvadoc_url
           }));
         }
-        else if ( attachment && (attachment['scribdable?'] || $.isPreviewable(attachment.content_type, 'google')) ) {
+        else if ( attachment && ($.isPreviewable(attachment.content_type, 'google')) ) {
           if (!INST.disableCrocodocPreviews) $no_annotation_warning.show();
 
-          if (scribdDocAvailable) {
-            previewOptions = $.extend(previewOptions, {
-              scribd_doc_id: attachment.scribd_doc.attributes.doc_id,
-              scribd_access_key: attachment.scribd_doc.attributes.access_key
-            });
-          }
           var currentStudentIDAsOfAjaxCall = this.currentStudent.id;
           previewOptions = $.extend(previewOptions, {
               ajax_valid: _.bind(function() {

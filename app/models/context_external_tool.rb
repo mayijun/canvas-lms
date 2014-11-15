@@ -13,7 +13,7 @@ class ContextExternalTool < ActiveRecord::Base
                   :resource_selection, :editor_button, :homework_submission,
                   :course_home_sub_navigation, :course_settings_sub_navigation,
                   :config_type, :config_url, :config_xml, :tool_id,
-                  :integration_type
+                  :integration_type, :not_selectable
 
   validates_presence_of :context_id, :context_type, :workflow_state
   validates_presence_of :name, :consumer_key, :shared_secret
@@ -45,7 +45,8 @@ class ContextExternalTool < ActiveRecord::Base
   EXTENSION_TYPES = [
     :user_navigation, :course_navigation, :account_navigation, :resource_selection,
     :editor_button, :homework_submission, :migration_selection, :course_home_sub_navigation,
-    :course_settings_sub_navigation, :global_navigation
+    :course_settings_sub_navigation, :global_navigation,
+    :assignment_menu, :discussion_topic_menu, :module_menu, :quiz_menu, :wiki_page_menu
   ]
 
   EXTENSION_TYPES.each do |type|
@@ -63,7 +64,7 @@ class ContextExternalTool < ActiveRecord::Base
   def extension_setting(type, property = nil)
     type = type.to_sym
     return settings[type] unless property && settings[type]
-    settings[type][property] || settings[property] || extension_default_value(property)
+    settings[type][property] || settings[property] || extension_default_value(type, property)
   end
 
   def set_extension_setting(type, hash)
@@ -266,6 +267,18 @@ class ContextExternalTool < ActiveRecord::Base
     settings[:text]
   end
 
+  def not_selectable
+    !!read_attribute(:not_selectable)
+  end
+
+  def not_selectable=(bool)
+    write_attribute(:not_selectable, Canvas::Plugin.value_to_boolean(bool))
+  end
+
+  def selectable
+    !not_selectable
+  end
+
   def shared_secret=(val)
     write_attribute(:shared_secret, val) unless val.blank?
   end
@@ -274,7 +287,7 @@ class ContextExternalTool < ActiveRecord::Base
     extension_setting(extension_type, :display_type) || 'in_context'
   end
 
-  def extension_default_value(property)
+  def extension_default_value(type, property)
     case property
       when :url
         url
@@ -282,6 +295,12 @@ class ContextExternalTool < ActiveRecord::Base
         800
       when :selection_height
         400
+      when :message_type
+        if type == :resource_selection
+          'resource_selection'
+        else
+          'basic-lti-launch-request'
+        end
       else
         nil
     end
@@ -415,32 +434,26 @@ class ContextExternalTool < ActiveRecord::Base
   end
 
   def self.contexts_to_search(context)
-    contexts = []
-    while context
-      if context.is_a?(Group)
-        contexts << context
-        context = context.context || context.account
-      elsif context.is_a?(Course)
-        contexts << context
-        context = context.account
-      elsif context.is_a?(Account)
-        contexts << context
-        context = context.parent_account
-      else
-        context = nil
-      end
+    case context
+    when Course
+      [context] + context.account_chain
+    when Group
+      [context] + (context.context ? contexts_to_search(context.context) : context.account_chain)
+    when Account
+      context.account_chain
+    else
+      []
     end
-
-    contexts
   end
   private_class_method :contexts_to_search
 
+  LOR_TYPES = [:course_home_sub_navigation, :course_settings_sub_navigation, :global_navigation,
+               :assignment_menu, :discussion_topic_menu, :module_menu, :quiz_menu, :wiki_page_menu]
   def self.all_tools_for(context, options={})
-    if [:course_home_sub_navigation, :course_settings_sub_navigation, :global_navigation].include?(options[:type])
+    if LOR_TYPES.include?(options[:type])
       return [] unless (options[:root_account] && options[:root_account].feature_enabled?(:lor_for_account)) ||
           (options[:current_user] && options[:current_user].feature_enabled?(:lor_for_user))
     end
-
     contexts = []
     if options[:user]
       contexts << options[:user]
@@ -448,12 +461,14 @@ class ContextExternalTool < ActiveRecord::Base
     contexts.concat contexts_to_search(context)
     return nil if contexts.empty?
 
-    tools = contexts.each_with_object([]) do |context, tools|
-      scope = context.context_external_tools.active
-      scope = scope.having_setting(options[:type]) if options[:type]
-      tools.concat scope
-    end
-    Canvas::ICU.collate_by(tools, &:name)
+    scope = ContextExternalTool.shard(context.shard).polymorphic_where(context: contexts).active
+    scope = scope.having_setting(options[:type]) if options[:type]
+    scope = scope.selectable if Canvas::Plugin.value_to_boolean(options[:selectable])
+    scope.order(ContextExternalTool.best_unicode_collation_key('name'))
+  end
+
+  def self.find_external_tool_by_id(id, context)
+    self.where(:id => id).polymorphic_where(:context => contexts_to_search(context)).first
   end
 
   # Order of precedence: Basic LTI defines precedence as first
@@ -470,12 +485,13 @@ class ContextExternalTool < ActiveRecord::Base
   # the teacher).
   def self.find_external_tool(url, context, preferred_tool_id=nil)
     contexts = contexts_to_search(context)
-    preferred_tool = ContextExternalTool.active.find_by_id(preferred_tool_id)
+    preferred_tool = ContextExternalTool.active.where(id: preferred_tool_id).first if preferred_tool_id
     if preferred_tool && contexts.member?(preferred_tool.context) && preferred_tool.matches_domain?(url)
       return preferred_tool
     end
 
-    sorted_external_tools = contexts.collect{|context| context.context_external_tools.active.sort_by{|t| [t.precedence, t.id == preferred_tool_id ? CanvasSort::First : CanvasSort::Last] }}.flatten(1)
+    all_external_tools = ContextExternalTool.shard(context.shard).polymorphic_where(context: contexts).active.to_a
+    sorted_external_tools = all_external_tools.sort_by { |t| [contexts.index { |c| c.id == t.context_id && c.class.name == t.context_type }, t.precedence, t.id == preferred_tool_id ? CanvasSort::First : CanvasSort::Last] }
 
     res = sorted_external_tools.detect{|tool| tool.url && tool.matches_url?(url) }
     return res if res
@@ -502,6 +518,26 @@ class ContextExternalTool < ActiveRecord::Base
   scope :having_setting, lambda { |setting| setting ? joins(:context_external_tool_placements).
       where("context_external_tool_placements.placement_type = ?", setting) : scoped }
 
+  scope :placements, lambda { |*placements|
+    if placements
+      module_item_sql = if placements.include? 'module_item'
+                          "(context_external_tools.not_selectable IS NOT TRUE AND
+                           ((COALESCE(context_external_tools.url, '') <> '' ) OR
+                           (COALESCE(context_external_tools.domain, '') <> ''))) OR "
+                        else
+                          ''
+                        end
+      where(module_item_sql + 'EXISTS (
+              SELECT * FROM context_external_tool_placements
+              WHERE context_external_tools.id = context_external_tool_placements.context_external_tool_id
+              AND context_external_tool_placements.placement_type IN (?) )', placements || [])
+    else
+      scoped
+    end
+  }
+
+  scope :selectable, lambda { where("context_external_tools.not_selectable IS NOT TRUE") }
+
   def self.find_for(id, context, type, raise_error=true)
     id = id[Api::ID_REGEX] if id.is_a?(String)
     unless id.present?
@@ -512,14 +548,13 @@ class ContextExternalTool < ActiveRecord::Base
       end
     end
 
-    tool = context.context_external_tools.having_setting(type).find_by_id(id)
+    tool = context.context_external_tools.having_setting(type).where(id: id).first
     if !tool && context.is_a?(Group)
       context = context.context
-      tool = context.context_external_tools.having_setting(type).find_by_id(id)
+      tool = context.context_external_tools.having_setting(type).where(id: id).first
     end
     if !tool
-      account_ids = context.account_chain_ids
-      tool = ContextExternalTool.having_setting(type).find_by_context_type_and_context_id_and_id('Account', account_ids, id)
+      tool = ContextExternalTool.having_setting(type).where(context_type: 'Account', context_id: context.account_chain, id: id).first
     end
     raise ActiveRecord::RecordNotFound if !tool && raise_error
 
@@ -532,8 +567,7 @@ class ContextExternalTool < ActiveRecord::Base
     if !context.is_a?(Account) && context.respond_to?(:context_external_tools)
       tools += context.context_external_tools.having_setting(type.to_s)
     end
-    account_ids = context.account_chain_ids
-    tools += ContextExternalTool.having_setting(type.to_s).find_all_by_context_type_and_context_id('Account', account_ids)
+    tools += ContextExternalTool.having_setting(type.to_s).where(context_type: 'Account', context_id: context.account_chain)
   end
 
   def self.serialization_excludes; [:shared_secret,:settings]; end
@@ -549,6 +583,21 @@ class ContextExternalTool < ActiveRecord::Base
           hash[key] = val
         else
           hash["custom_#{key}"] = val
+        end
+      end
+    end
+  end
+
+  def substituted_custom_fields(placement, substitutions)
+    custom_fields = {}
+    set_custom_fields(custom_fields, placement)
+
+    custom_fields.each do |k,v|
+      if substitutions.has_key?(v)
+        if substitutions[v].respond_to?(:call)
+          custom_fields[k] = substitutions[v].call
+        else
+          custom_fields[k] = substitutions[v]
         end
       end
     end

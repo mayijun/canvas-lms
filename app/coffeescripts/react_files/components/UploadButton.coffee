@@ -2,62 +2,102 @@ define [
   'i18n!upload_button'
   'react'
   'compiled/react/shared/utils/withReactDOM'
-  '../modules/UploadQueue'
   'underscore'
-], (I18n, React, withReactDOM, UploadQueue, _) ->
+  './FileRenameForm'
+  '../modules/customPropTypes'
+  './ZipFileOptionsForm'
+  '../modules/FileOptionsCollection'
+], (I18n, React, withReactDOM, _, FileRenameForm, customPropTypes, ZipFileOptionsForm, FileOptionsCollection) ->
+
+  resolvedUserAction = false
 
   UploadButton = React.createClass
+    displayName: 'UploadButton'
 
     propTypes:
-      currentFolder: React.PropTypes.object # not required as we don't have it on the first render
+      currentFolder: customPropTypes.folder # not required as we don't have it on the first render
+      contextId: React.PropTypes.string
+      contextType: React.PropTypes.string
 
-    getDefaultState: ->
-      return {
-        filesToUpload: []
-        nameCollisions: []
-      }
+    getInitialState: ->
+      return FileOptionsCollection.getState()
 
-    fileNameExists: (selectedFiles, name) ->
-      found = _.find @props.currentFolder.files.models, (f) ->
-        f.get('display_name') == name
-
-    findNameCollisions: (selectedFiles) ->
-      i = 0
-      collisions = []
-      while i < selectedFiles.length
-        f = selectedFiles.item(i)
-        if @fileNameExists selectedFiles, f.name
-          collisions.push f
-        i++
-      collisions
-
-    queueUploads: (selectedFiles) ->
-      j = 0
-      while j<selectedFiles.length
-        UploadQueue.enqueue(selectedFiles.item(j), this.props.currentFolder)
-        j++
+    queueUploads: ->
+      @refs.form.getDOMNode().reset()
+      FileOptionsCollection.queueUploads(@props.contextId, @props.contextType)
 
     handleAddFilesClick: ->
       this.refs.addFileInput.getDOMNode().click()
 
     handleFilesInputChange: (e) ->
-      selectedFiles = this.refs.addFileInput.getDOMNode().files
-      collisions = @findNameCollisions(selectedFiles)
-      if collisions.length > 0
-        console.log(collisions.length + " file name collisions, uploading anyway for now")
+      resolvedUserAction = false
+      files = this.refs.addFileInput.getDOMNode().files
+      FileOptionsCollection.setFolder(@props.currentFolder)
+      FileOptionsCollection.setOptionsFromFiles(files)
+      @setState(FileOptionsCollection.getState())
+
+    onNameConflictResolved: (fileNameOptions) ->
+      FileOptionsCollection.onNameConflictResolved(fileNameOptions)
+      resolvedUserAction = true
+      @setState(FileOptionsCollection.getState())
+
+    onZipOptionsResolved: (fileNameOptions) ->
+      FileOptionsCollection.onZipOptionsResolved(fileNameOptions)
+      resolvedUserAction = true
+      @setState(FileOptionsCollection.getState())
+
+    onClose: ->
+      @refs.form.getDOMNode().reset()
+      if !resolvedUserAction
+        # user dismissed zip or name conflict modal without resolving things
+        # reset state to dump previously selected files
+        FileOptionsCollection.resetState()
+        @setState(FileOptionsCollection.getState())
+      resolvedUserAction = false
+
+    componentDidUpdate: (prevState) ->
+      if @state.nameCollisions.length == 0 && @state.resolvedNames.length > 0 && FileOptionsCollection.hasNewOptions()
+        @queueUploads()
       else
-        # TODO:  only upload once naming collisions are resolved in CNVS-12667
-      @queueUploads(selectedFiles)
+        resolvedUserAction = false
+
+    componentWillMount: ->
+      FileOptionsCollection.onChange = @setStateFromOptions
+
+    componentWillUnMount: ->
+      FileOptionsCollection.onChange = null
+
+    setStateFromOptions: ->
+      @setState(FileOptionsCollection.getState())
+
+    buildPotentialModal: ->
+      if @state.zipOptions.length
+        ZipFileOptionsForm
+          fileOptions: @state.zipOptions[0]
+          onZipOptionsResolved: @onZipOptionsResolved
+          onClose: @onClose
+      else if @state.nameCollisions.length
+        FileRenameForm
+          fileOptions: @state.nameCollisions[0]
+          onNameConflictResolved: @onNameConflictResolved
+          onClose: @onClose
 
 
     render: withReactDOM ->
-      div {},
-        input
-          type:'file'
-          className:'hidden'
-          ref:'addFileInput'
-          onChange: @handleFilesInputChange
-          multiple: true
-        button className:'btn btn-primary', onClick: @handleAddFilesClick,
-          i className:'icon-plus'
-          I18n.t('files', 'Files')
+      span {},
+        form
+          ref: 'form'
+          className: 'hidden',
+          input
+            type:'file'
+            ref:'addFileInput'
+            onChange: @handleFilesInputChange
+            multiple: true
+        button
+          className:'btn btn-primary btn-upload'
+          'aria-label': I18n.t('upload', 'Upload')
+          onClick: @handleAddFilesClick,
+            i className: 'icon-upload'
+            span className: ('hidden-phone' if @props.showingButtons),
+              I18n.t('upload', 'Upload')
+        @buildPotentialModal()

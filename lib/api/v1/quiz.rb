@@ -17,7 +17,6 @@
 #
 module Api::V1::Quiz
   include Api::V1::Json
-  include Api::V1::AssignmentOverride
 
   API_ALLOWED_QUIZ_INPUT_FIELDS = {
     :only => %w(
@@ -49,27 +48,28 @@ module Api::V1::Quiz
       )
   }
 
-  def quizzes_json(quizzes, context, user, session)
+  def quizzes_json(quizzes, context, user, session, options={})
     quizzes.map do |quiz|
-      quiz_json(quiz, context, user, session)
+      quiz_json(quiz, context, user, session, options)
     end
   end
 
-  def quiz_json(quiz, context, user, session)
+  def quiz_json(quiz, context, user, session, options={})
     if accepts_jsonapi?
       Canvas::APIArraySerializer.new([quiz],
                          scope: user,
                          session: session,
                          root: :quizzes,
                          each_serializer: Quizzes::QuizSerializer,
-                         controller: self).as_json
+                         controller: self,
+                         serializer_options: options).as_json
     else
       Quizzes::QuizSerializer.new(quiz,
                          scope: user,
                          session: session,
                          root: false,
-                         controller: self).as_json
-
+                         controller: self,
+                         serializer_options: options).as_json
     end
   end
 
@@ -109,7 +109,7 @@ module Api::V1::Quiz
     # make sure assignment_group_id belongs to context
     if update_params.has_key?("assignment_group_id")
       ag_id = update_params.delete("assignment_group_id").presence
-      ag = quiz.context.assignment_groups.find_by_id(ag_id)
+      ag = quiz.context.assignment_groups.where(id: ag_id).first
       update_params["assignment_group_id"] = ag.try(:id)
     end
 
@@ -197,5 +197,4 @@ module Api::V1::Quiz
 
     quiz
   end
-
 end

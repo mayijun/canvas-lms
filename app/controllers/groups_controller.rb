@@ -151,7 +151,7 @@ class GroupsController < ApplicationController
   end
 
   def unassigned_members
-    category = @context.group_categories.find_by_id(params[:category_id])
+    category = @context.group_categories.where(id: params[:category_id]).first
     return render :json => {}, :status => :not_found unless category
     page = (params[:page] || 1).to_i rescue 1
     per_page = Api.per_page_for(self, default: 15, max: 100)
@@ -182,7 +182,7 @@ class GroupsController < ApplicationController
   #
   # Returns a list of active groups for the current user.
   #
-  # @argument context_type [Optional, String, "Account"|"Course"]
+  # @argument context_type [String, "Account"|"Course"]
   #  Only include groups that are in this type of context.
   #
   # @example_request
@@ -409,7 +409,7 @@ class GroupsController < ApplicationController
     elsif params[:group]
       group_category_id = params[:group].delete :group_category_id
       if group_category_id && @context.grants_right?(@current_user, session, :manage_groups)
-        group_category = @context.group_categories.find_by_id(group_category_id)
+        group_category = @context.group_categories.where(id: group_category_id).first
         return render :json => {}, :status => :bad_request unless group_category
         params[:group][:group_category] = group_category
       else
@@ -477,7 +477,7 @@ class GroupsController < ApplicationController
     find_group
     if !api_request? && params[:group] && params[:group][:group_category_id]
       group_category_id = params[:group].delete :group_category_id
-      group_category = @context.group_categories.find_by_id(group_category_id)
+      group_category = @context.group_categories.where(id: group_category_id).first
       return render :json => {}, :status => :bad_request unless group_category
       params[:group][:group_category] = group_category
     end
@@ -485,11 +485,11 @@ class GroupsController < ApplicationController
     attrs.delete :storage_quota_mb unless @group.context.grants_right? @current_user, session, :manage_storage_quotas
 
     if avatar_id = (params[:avatar_id] || (params[:group] && params[:group][:avatar_id]))
-      attrs[:avatar_attachment] = @group.active_images.find_by_id(avatar_id)
+      attrs[:avatar_attachment] = @group.active_images.where(id: avatar_id).first
     end
 
     if attrs[:leader]
-      membership = @group.group_memberships.find_by_user_id(attrs[:leader][:id])
+      membership = @group.group_memberships.where(user_id: attrs[:leader][:id]).first
       return render :json => {}, :status => :bad_request unless membership
       attrs[:leader] = membership.user
     end
@@ -544,12 +544,13 @@ class GroupsController < ApplicationController
   # Sends an invitation to all supplied email addresses which will allow the
   # receivers to join the group.
   #
-  # @argument invitees[] [String]
+  # @argument invitees[] [Required, String]
   #   An array of email addresses to be sent invitations.
   #
   # @example_request
   #     curl https://<canvas>/api/v1/groups/<group_id>/invite \
-  #          -F 'invitees[]=leonard@example.com&invitees[]=sheldon@example.com' \
+  #          -F 'invitees[]=leonard@example.com' \
+  #          -F 'invitees[]=sheldon@example.com' \
   #          -H 'Authorization: Bearer <token>'
   def invite
     find_group
@@ -598,7 +599,7 @@ class GroupsController < ApplicationController
   def remove_user
     @group = @context
     if authorized_action(@group, @current_user, :manage)
-      @membership = @group.group_memberships.find_by_user_id(params[:user_id])
+      @membership = @group.group_memberships.where(user_id: params[:user_id]).first
       @membership.destroy
       render :json => @membership
     end
@@ -609,7 +610,7 @@ class GroupsController < ApplicationController
   #
   # Returns a list of users in the group.
   #
-  # @argument search_term [Optional, String]
+  # @argument search_term [String]
   #   The partial name or full ID of the users to match and return in the
   #   results list. Must be at least 3 characters.
   #

@@ -1,6 +1,9 @@
 <% content_for :page_title do %><%= @lti_launch.link_text %><% end %>
 
 <% js_bundle 'legacy/external_tools_tool_show' %>
+<% js_bundle :external_tool_redirect if @redirect_return %>
+
+<%= render @prepend_template if @prepend_template %>
 
 <% if @lti_launch.resource_url.start_with?('http://') %>
     <div class="alert alert-error" id="insecure_content_msg">
@@ -8,6 +11,8 @@
         <p id="load_failure" class="hide"><%= t('tool_load_failure', 'It looks like your content might not load.  You can use this button to try launching it in a new tab.') %></p>
     </div>
 <% end %>
+
+<div class="tool_content_wrapper">
 
 <form action="<%= @lti_launch.resource_url %>"
       class="hide"
@@ -35,5 +40,9 @@
         </div>
     </div>
 </form>
-<%= iframe("about:blank", :name => 'tool_content', :id => 'tool_content', :width => '100%', :height => '400') %>
+<%= iframe("about:blank", :name => 'tool_content', :id => 'tool_content', :width => '100%', :height => '100%',
+           allowfullscreen: "true", webkitallowfullscreen: "true", mozallowfullscreen: "true") %>
 
+</div>
+
+<%= render @append_template if @append_template %>

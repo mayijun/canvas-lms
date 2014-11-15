@@ -120,7 +120,7 @@ class UsersController < ApplicationController
   before_filter :require_self_registration, :only => [:new, :create]
 
   def grades
-    @user = User.find_by_id(params[:user_id]) if params[:user_id].present?
+    @user = User.where(id: params[:user_id]).first if params[:user_id].present?
     @user ||= @current_user
     if authorized_action(@user, @current_user, :read)
       current_active_enrollments = @user.current_enrollments.with_each_shard { |scope| scope.includes(:course) }
@@ -132,7 +132,7 @@ class UsersController < ApplicationController
         return
       end
 
-      Enrollment.send(:preload_associations, @observed_enrollments, :course)
+      ActiveRecord::Associations::Preloader.new(@observed_enrollments, :course).run
     end
   end
 
@@ -199,12 +199,12 @@ class UsersController < ApplicationController
   def oauth_success
     oauth_request = nil
     if params[:oauth_token]
-      oauth_request = OauthRequest.find_by_token_and_service(params[:oauth_token], params[:service])
+      oauth_request = OauthRequest.where(token: params[:oauth_token], service: params[:service]).first
     elsif params[:state] && params[:service] == 'facebook'
       key,salt = params[:state].split('.', 2)
       request_id = Canvas::Security.decrypt_password(key, salt, 'facebook_oauth_request')
 
-      oauth_request = OauthRequest.find_by_id(request_id)
+      oauth_request = OauthRequest.where(id: request_id).first
     end
 
     if !oauth_request || (request.host_with_port == oauth_request.original_host_with_port && oauth_request.user != @current_user)
@@ -215,8 +215,7 @@ class UsersController < ApplicationController
       redirect_to url
     else
       if params[:service] == "facebook"
-        service = UserService.find_by_user_id_and_service(@current_user.id, 'facebook')
-        service ||= UserService.new(:user => @current_user, :service => 'facebook')
+        service = UserService.where(user_id: @current_user, service: 'facebook').first_or_initialize
         service.token = params[:access_token]
         data = Facebook::Connection.get_service_user_info(service.token)
 
@@ -317,7 +316,7 @@ class UsersController < ApplicationController
   # @API List users in account
   # Retrieve the list of users associated with this account.
   #
-  # @argument search_term [Optional, String]
+  # @argument search_term [String]
   #   The partial name or full ID of the users to match and return in the
   #   results list. Must be at least 3 characters.
   #
@@ -414,7 +413,7 @@ class UsersController < ApplicationController
     js_env :DASHBOARD_SIDEBAR_URL => dashboard_sidebar_url
 
     @announcements = AccountNotification.for_user_and_account(@current_user, @domain_root_account)
-    @pending_invitations = @current_user.cached_current_enrollments(:include_enrollment_uuid => session[:enrollment_uuid]).select { |e| e.invited? }
+    @pending_invitations = @current_user.cached_current_enrollments(:include_enrollment_uuid => session[:enrollment_uuid], :preload_courses => true).select { |e| e.invited? }
     @stream_items = @current_user.try(:cached_recent_stream_items) || []
   end
 
@@ -480,7 +479,7 @@ class UsersController < ApplicationController
   #     'id': 1234,
   #     'title': 'Stream Item Subject',
   #     'message': 'This is the body text of the activity stream item. It is plain-text, and can be multiple paragraphs.',
-  #     'type': 'DiscussionTopic|Conversation|Message|Submission|Conference|Collaboration|...',
+  #     'type': 'DiscussionTopic|Conversation|Message|Submission|Conference|Collaboration|AssessmentRequest...',
   #     'read_state': false,
   #     'context_type': 'course', // course|group
   #     'course_id': 1,
@@ -559,6 +558,14 @@ class UsersController < ApplicationController
   #   {
   #     'type': 'Collaboration',
   #     'collaboration_id': 1234
+  #   }
+  #
+  # AssessmentRequest:
+  #
+  #   !!!javascript
+  #   {
+  #     'type': 'AssessmentRequest',
+  #     'assessment_request_id': 1234
   #   }
   def activity_stream
     if @current_user
@@ -863,7 +870,7 @@ class UsersController < ApplicationController
   end
 
   def bookmark_search
-    @service = @current_user.user_services.find_by_type_and_service('BookmarkService', params[:service_type]) rescue nil
+    @service = @current_user.user_services.where(type: 'BookmarkService', service: params[:service_type]).first rescue nil
     res = nil
     res = @service.find_bookmarks(params[:q]) if @service
     render :json => res
@@ -903,23 +910,31 @@ class UsersController < ApplicationController
 
   def external_tool
     @tool = ContextExternalTool.find_for(params[:id], @domain_root_account, :user_navigation)
-    @resource_title = @tool.label_for(:user_navigation)
-    @resource_url = @tool.user_navigation(:url)
     @opaque_id = @tool.opaque_identifier_for(@current_user)
     @resource_type = 'user_navigation'
-    @return_url = user_profile_url(@current_user, :include_host => true)
 
+    success_url = user_profile_url(@current_user)
+    @return_url = external_content_success_url('external_tool_redirect')
+    @redirect_return = true
+    js_env(:redirect_return_success_url => success_url,
+           :redirect_return_cancel_url => success_url)
+
+    @lti_launch = Lti::Launch.new
     opts = {
         resource_type: @resource_type,
         link_code: @opaque_id,
         custom_substitutions: common_variable_substitutions
     }
     adapter = Lti::LtiOutboundAdapter.new(@tool, @current_user, @domain_root_account).prepare_tool_launch(@return_url, opts)
-    @tool_settings = adapter.generate_post_payload
+    @lti_launch.params = adapter.generate_post_payload
+
+    @lti_launch.resource_url = @tool.user_navigation(:url)
+    @lti_launch.link_text = @tool.label_for(:user_navigation)
+    @lti_launch.analytics_id = @tool.tool_id
 
     @active_tab = @tool.asset_string
     add_crumb(@current_user.short_name, user_profile_path(@current_user))
-    render :template => 'external_tools/tool_show'
+    render ExternalToolsController::TOOL_DISPLAY_TEMPLATES['default']
   end
 
   def new
@@ -941,54 +956,58 @@ class UsersController < ApplicationController
   # endpoint to register new users. Certain fields will be required, and
   # others will be ignored (see below).
   #
-  # @argument user[name] [Optional, String]
+  # @argument user[name] [String]
   #   The full name of the user. This name will be used by teacher for grading.
   #   Required if this is a self-registration.
   #
-  # @argument user[short_name] [Optional, String]
+  # @argument user[short_name] [String]
   #   User's name as it will be displayed in discussions, messages, and comments.
   #
-  # @argument user[sortable_name] [Optional, String]
+  # @argument user[sortable_name] [String]
   #   User's name as used to sort alphabetically in lists.
   #
-  # @argument user[time_zone] [Optional, String]
+  # @argument user[time_zone] [String]
   #   The time zone for the user. Allowed time zones are
   #   {http://www.iana.org/time-zones IANA time zones} or friendlier
   #   {http://api.rubyonrails.org/classes/ActiveSupport/TimeZone.html Ruby on Rails time zones}.
   #
-  # @argument user[locale] [Optional, String]
+  # @argument user[locale] [String]
   #   The user's preferred language as a two-letter ISO 639-1 code.
   #
-  # @argument user[birthdate] [Optional, Date]
+  # @argument user[birthdate] [Date]
   #   The user's birth date.
   #
-  # @argument user[terms_of_use] [Optional, Boolean]
+  # @argument user[terms_of_use] [Boolean]
   #   Whether the user accepts the terms of use. Required if this is a
   #   self-registration and this canvas instance requires users to accept
   #   the terms (on by default).
   #
-  # @argument pseudonym[unique_id] [String]
+  # @argument pseudonym[unique_id] [Required, String]
   #   User's login ID. If this is a self-registration, it must be a valid
   #   email address.
   #
-  # @argument pseudonym[password] [Optional, String]
+  # @argument pseudonym[password] [String]
   #   User's password. Cannot be set during self-registration.
   #
-  # @argument pseudonym[sis_user_id] [Optional, String]
+  # @argument pseudonym[sis_user_id] [String]
   #   SIS ID for the user's account. To set this parameter, the caller must be
   #   able to manage SIS permissions.
   #
-  # @argument pseudonym[send_confirmation] [Optional, Boolean]
+  # @argument pseudonym[send_confirmation] [Boolean]
   #   Send user notification of account creation if true.
   #   Automatically set to true during self-registration.
   #
-  # @argument communication_channel[type] [Optional, String]
+  # @argument communication_channel[type] [String]
   #   The communication channel type, e.g. 'email' or 'sms'.
   #
-  # @argument communication_channel[address] [Optional, String]
+  # @argument communication_channel[address] [String]
   #   The communication channel address, e.g. the user's email address.
   #
-  # @argument communication_channel[skip_confirmation] [Optional, Boolean]
+  # @argument communication_channel[confirmation_url] [Boolean]
+  #   Only valid for account admins. If true, returns the new user account
+  #   confirmation URL in the response.
+  #
+  # @argument communication_channel[skip_confirmation] [Boolean]
   #   Only valid for site admins and account admins making requests; If true, the channel is
   #   automatically validated and no confirmation email or SMS is sent.
   #   Otherwise, the user must respond to a confirmation message to confirm the
@@ -997,7 +1016,7 @@ class UsersController < ApplicationController
   # @returns User
   def create
     # Look for an incomplete registration with this pseudonym
-    @pseudonym = @context.pseudonyms.active.custom_find_by_unique_id(params[:pseudonym][:unique_id])
+    @pseudonym = @context.pseudonyms.active.by_unique_id(params[:pseudonym][:unique_id]).first
     # Setting it to nil will cause us to try and create a new one, and give user the login already exists error
     @pseudonym = nil if @pseudonym && !['creation_pending', 'pending_approval'].include?(@pseudonym.user.workflow_state)
 
@@ -1010,11 +1029,24 @@ class UsersController < ApplicationController
     notify = value_to_boolean(params[:pseudonym].delete(:send_confirmation))
     notify = :self_registration unless manage_user_logins
 
-    if params[:communication_channel]
-      cc_type = params[:communication_channel][:type] || CommunicationChannel::TYPE_EMAIL
-      cc_addr = params[:communication_channel][:address]
-      skip_confirmation = value_to_boolean(params[:communication_channel][:skip_confirmation]) &&
-          (Account.site_admin.grants_right?(@current_user, :manage_students) || @context.grants_right?(@current_user, :manage_students))
+    includes = %w{locale}
+
+    if cc_params = params[:communication_channel]
+      cc_type = cc_params[:type] || CommunicationChannel::TYPE_EMAIL
+      cc_addr = cc_params[:address] || params[:pseudonym][:unique_id]
+
+      can_manage_students = [Account.site_admin, @context].any? do |role|
+        role.grants_right?(@current_user, :manage_students)
+      end
+
+      if can_manage_students
+        skip_confirmation = value_to_boolean(cc_params[:skip_confirmation])
+      end
+
+      if can_manage_students && cc_type == CommunicationChannel::TYPE_EMAIL
+        includes << 'confirmation_url' if value_to_boolean(cc_params[:confirmation_url])
+      end
+
     else
       cc_type = CommunicationChannel::TYPE_EMAIL
       cc_addr = params[:pseudonym].delete(:path) || params[:pseudonym][:unique_id]
@@ -1026,7 +1058,11 @@ class UsersController < ApplicationController
     @user = @pseudonym && @pseudonym.user
     @user ||= User.new
     if params[:user]
-      params[:user].delete(:self_enrollment_code) unless self_enrollment
+      if self_enrollment && params[:user][:self_enrollment_code]
+        params[:user][:self_enrollment_code].strip!
+      else
+        params[:user].delete(:self_enrollment_code)
+      end
       if params[:user][:birthdate].present? && params[:user][:birthdate] !~ Api::ISO8601_REGEX &&
           params[:user][:birthdate] !~ Api::DATE_REGEX
         return render(:json => {:errors => {:birthdate => t(:birthdate_invalid,
@@ -1122,7 +1158,7 @@ class UsersController < ApplicationController
 
       data = { :user => @user, :pseudonym => @pseudonym, :channel => @cc, :message_sent => message_sent, :course => @user.self_enrollment_course }
       if api_request?
-        render(:json => user_json(@user, @current_user, session, %w{locale}))
+        render(:json => user_json(@user, @current_user, session, includes))
       else
         render(:json => data)
       end
@@ -1180,24 +1216,24 @@ class UsersController < ApplicationController
   # @API Edit a user
   # Modify an existing user. To modify a user's login, see the documentation for logins.
   #
-  # @argument user[name] [Optional, String]
+  # @argument user[name] [String]
   #   The full name of the user. This name will be used by teacher for grading.
   #
-  # @argument user[short_name] [Optional, String]
+  # @argument user[short_name] [String]
   #   User's name as it will be displayed in discussions, messages, and comments.
   #
-  # @argument user[sortable_name] [Optional, String]
+  # @argument user[sortable_name] [String]
   #   User's name as used to sort alphabetically in lists.
   #
-  # @argument user[time_zone] [Optional, String]
+  # @argument user[time_zone] [String]
   #   The time zone for the user. Allowed time zones are
   #   {http://www.iana.org/time-zones IANA time zones} or friendlier
   #   {http://api.rubyonrails.org/classes/ActiveSupport/TimeZone.html Ruby on Rails time zones}.
   #
-  # @argument user[locale] [Optional, String]
+  # @argument user[locale] [String]
   #   The user's preferred language as a two-letter ISO 639-1 code.
   #
-  # @argument user[avatar][token] [Optional, String]
+  # @argument user[avatar][token] [String]
   #   A unique representation of the avatar record to assign as the user's
   #   current avatar. This token can be obtained from the user avatars endpoint.
   #   This supersedes the user [avatar] [url] argument, and if both are included
@@ -1206,7 +1242,7 @@ class UsersController < ApplicationController
   #   endpoint and used in the user update endpoint, and should not be
   #   constructed by the client.
   #
-  # @argument user[avatar][url] [Optional, String]
+  # @argument user[avatar][url] [String]
   #   To set the user's avatar to point to an external url, do not include a
   #   token and instead pass the url here. Warning: For maximum compatibility,
   #   please use 128 px square images.
@@ -1324,14 +1360,13 @@ class UsersController < ApplicationController
   def merge
     @user_about_to_go_away = User.find(params[:user_id])
 
-    if params[:new_user_id] && @true_user = User.find_by_id(params[:new_user_id])
-      if @true_user.grants_right?(@current_user, session, :manage_logins) && @user_about_to_go_away.grants_right?(@current_user, session, :manage_logins)
-        @user_that_will_still_be_around = @true_user
-      else
-        @user_that_will_still_be_around = nil
-      end
+    @true_user = User.where(id: params[:new_user_id]).first if params[:new_user_id]
+    @true_user ||= @current_user
+
+    if @true_user.grants_right?(@current_user, session, :manage_logins) && @user_about_to_go_away.grants_right?(@current_user, session, :manage_logins)
+      @user_that_will_still_be_around = @true_user
     else
-      @user_that_will_still_be_around = @current_user
+      @user_that_will_still_be_around = nil
     end
 
     if @user_about_to_go_away && @user_that_will_still_be_around
@@ -1354,7 +1389,7 @@ class UsersController < ApplicationController
   def admin_merge
     @user = User.find(params[:user_id])
     pending_other_error = get_pending_user_and_error(params[:pending_user_id])
-    @other_user = User.find_by_id(params[:new_user_id]) if params[:new_user_id].present?
+    @other_user = User.where(id: params[:new_user_id]).first if params[:new_user_id].present?
     if authorized_action(@user, @current_user, :manage_logins)
       flash[:error] = pending_other_error if pending_other_error.present?
 
@@ -1413,7 +1448,7 @@ class UsersController < ApplicationController
       if !session["reported_#{@user.id}".to_sym]
         if params[:context_code]
           @context = Context.find_by_asset_string(params[:context_code]) rescue nil
-          @context = nil unless context.respond_to?(:users) && context.users.find_by_id(@user.id)
+          @context = nil unless context.respond_to?(:users) && context.users.where(id: @user).first
         end
         @user.report_avatar_image!(@context)
       end
@@ -1425,11 +1460,9 @@ class UsersController < ApplicationController
   def delete
     @user = User.find(params[:user_id])
     if authorized_action(@user, @current_user, [:manage, :manage_logins])
-      if @user.pseudonyms.any? {|p| p.managed_password? }
-        unless @user.grants_right?(@current_user, session, :manage_logins)
-          flash[:error] = t('no_deleting_sis_user', "You cannot delete a system-generated user")
-          redirect_to user_profile_url(@current_user)
-        end
+      unless @user.grants_right?(@current_user, :delete)
+        flash[:error] = t('no_deleting_sis_user', "You cannot delete a system-generated user")
+        redirect_to user_profile_url(@current_user)
       end
     end
   end
@@ -1449,8 +1482,8 @@ class UsersController < ApplicationController
   # @returns User
   def destroy
     @user = api_find(User, params[:id])
-    if authorized_action(@user, @current_user, [:manage, :manage_logins])
-      @user.destroy(@user.grants_right?(@current_user, session, :manage_logins))
+    if authorized_action(@user, @current_user, :delete)
+      @user.destroy(true)
       if @user == @current_user
         logout_current_user
       end
@@ -1545,7 +1578,7 @@ class UsersController < ApplicationController
         enrollments = student.student_enrollments.active.includes(:course).all
         enrollments.each do |enrollment|
           should_include = enrollment.course.user_has_been_instructor?(@teacher) &&
-                           enrollment.course.enrollments_visible_to(@teacher, :include_priors => true).find_by_id(enrollment.id) &&
+                           enrollment.course.enrollments_visible_to(@teacher, :include_priors => true).where(id: enrollment).first &&
                            enrollment.course.grants_right?(@current_user, :read_reports)
           if should_include
             Enrollment.recompute_final_score_if_stale(enrollment.course, student) { enrollment.reload }
@@ -1588,7 +1621,7 @@ class UsersController < ApplicationController
     user_shard ||= Shard.current
     url = user_shard.activate do
       Rails.cache.fetch(Cacher.avatar_cache_key(user_id, account_avatar_setting)) do
-        user = User.find_by_id(user_id) if user_id.present?
+        user = User.where(id: user_id).first if user_id.present?
         if user
           user.avatar_url(nil, account_avatar_setting, "%{fallback}")
         else

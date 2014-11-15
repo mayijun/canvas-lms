@@ -84,6 +84,10 @@
 #         },
 #         "thumbnail_url": {
 #           "type": "string"
+#         },
+#         "preview_url": {
+#           "type": "string",
+#           "description": "optional: url to the document preview (only included in submission endpoints)"
 #         }
 #       }
 #     }
@@ -162,7 +166,8 @@ class FilesController < ApplicationController
   protected :check_file_access_flags
 
   def index
-    return ember_app if (@context.feature_enabled?(:better_file_browsing))
+    # to turn :better_file_browsing on for user files, turn it on for the account they are a part of.
+    return ember_app if (@context.is_a?(User) ? @context.account : @context).feature_enabled?(:better_file_browsing)
 
     if request.format == :json
       if authorized_action(@context.attachments.build, @current_user, :read)
@@ -207,23 +212,23 @@ class FilesController < ApplicationController
   # @API List files
   # Returns the paginated list of files for the folder or course.
   #
-  # @argument content_types[] [Optional, String]
+  # @argument content_types[] [String]
   #   Filter results by content-type. You can specify type/subtype pairs (e.g.,
   #   'image/jpeg'), or simply types (e.g., 'image', which will match
   #   'image/gif', 'image/jpeg', etc.).
   #
-  # @argument search_term [Optional, String]
+  # @argument search_term [String]
   #   The partial name of the files to match and return.
   #
-  # @argument include[] [Optional, "user"]
+  # @argument include[] ["user"]
   #   Array of additional information to include.
   #
   #   "user":: the user who uploaded the file or last edited its content
   #
-  # @argument sort [Optional, String, "name"|"size"|"created_at"|"updated_at"|"content_type"|"user"]
+  # @argument sort [String, "name"|"size"|"created_at"|"updated_at"|"content_type"|"user"]
   #   Sort results by this field. Defaults to 'name'. Note that `sort=user` implies `include[]=user`.
   #
-  # @argument order [Optional, String, "asc"|"desc"]
+  # @argument order [String, "asc"|"desc"]
   #   The sorting order. Defaults to 'asc'.
   #
   # @example_request
@@ -314,13 +319,28 @@ class FilesController < ApplicationController
   end
 
   def ember_app
-    raise ActiveRecord::RecordNotFound unless tab_enabled?(@context.class::TAB_FILES) && @context.feature_enabled?(:better_file_browsing)
-    clear_crumbs
-    @padless = true
-    @body_classes << 'full-width'
-    js_bundle :react_files
-    jammit_css :ember_files
-    render :text => "".html_safe, :layout => true
+    raise ActiveRecord::RecordNotFound unless (@context.is_a?(User) ? @context.account : @context).feature_enabled?(:better_file_browsing)
+    if tab_enabled?(@context.class::TAB_FILES)
+      @contexts = [@context]
+      get_all_pertinent_contexts(include_groups: true) if @context == @current_user
+      files_contexts = @contexts.map do |context|
+        {
+          asset_string: context.asset_string,
+          name: context == @current_user ? t('my_files', 'My Files') : context.name,
+          permissions: {
+            manage_files: context.grants_right?(@current_user, session, :manage_files),
+          }
+        }
+      end
+
+      @page_title = t('files_page_title', 'Files')
+      @body_classes << 'full-width padless-content'
+      js_bundle :react_files
+      jammit_css :ember_files
+      js_env :FILES_CONTEXTS => files_contexts
+
+      render :text => "".html_safe, :layout => true
+    end
   end
 
 
@@ -412,7 +432,7 @@ class FilesController < ApplicationController
   # @API Get file
   # Returns the standard attachment json object
   #
-  # @argument include[] [Optional, "user"]
+  # @argument include[] ["user"]
   #   Array of additional information to include.
   #
   #   "user":: the user who uploaded the file or last edited its content
@@ -450,8 +470,12 @@ class FilesController < ApplicationController
     params[:download] ||= params[:preview]
     add_crumb(t('#crumbs.files', "Files"), named_context_url(@context, :context_files_url)) unless @skip_crumb
     if @attachment.deleted?
-      return render_unauthorized_action unless @attachment.user_id == @current_user.id
-      flash[:notice] = t 'notices.deleted', "The file %{display_name} has been deleted", :display_name => @attachment.display_name
+      unless @attachment.user_id == @current_user.id
+        @not_found_message = t('could_not_find_file', "This file has been deleted")
+        render status: 404, template: "shared/errors/404_message"
+        return
+      end
+      flash[:notice] = t 'notices.deleted', "The file %{display_name} has been deleted", display_name: @attachment.display_name
       if params[:preview] && @attachment.mime_class == 'image'
         redirect_to '/images/blank.png'
       elsif request.format == :json
@@ -493,18 +517,6 @@ class FilesController < ApplicationController
     end
   end
 
-  def scribd_render
-    # ApplicationController#get_context doesn't support Assignment
-    if @context.is_a?(User) && params[:assignment_id].present?
-      @context = Assignment.find(params[:assignment_id])
-    end
-    @attachment = @context.attachments.find(params[:file_id])
-    if @attachment.attachment_associations.where(:context_type => 'Submission').any? { |aa| aa.context.grants_right?(@current_user, session, :read) } || authorized_action(@attachment, @current_user, :read)
-      @attachment.check_rerender_scribd_doc
-      render :json => {:ok => true}
-    end
-  end
-
   def render_attachment(attachment)
     respond_to do |format|
       if params[:preview] && attachment.mime_class == 'image'
@@ -521,18 +533,16 @@ class FilesController < ApplicationController
         can_download = attachment.grants_right?(@current_user, session, :download)
         if can_download
           # Right now we assume if they ask for json data on the attachment
-          # which includes the scribd doc data, then that means they have
-          # viewed or are about to view the file in some form.
+          # then that means they have viewed or are about to view the file in
+          # some form.
           if @current_user &&
-            ((feature_enabled?(:scribd) && attachment.scribd_doc) ||
-             attachment.canvadocable? ||
-             (service_enabled?(:google_docs_previews) && attachment.authenticated_s3_url))
+             (attachment.canvadocable? ||
+              (service_enabled?(:google_docs_previews) && attachment.authenticated_s3_url))
             attachment.context_module_action(@current_user, :read)
             attachment.record_inline_view
           end
           options[:methods] = []
           options[:methods] << :authenticated_s3_url if service_enabled?(:google_docs_previews) && attachment.authenticated_s3_url
-          options[:methods] << :scribd_render_url if attachment.scribd_doc_missing?
           log_asset_access(attachment, "files", "files")
         end
       end
@@ -553,7 +563,7 @@ class FilesController < ApplicationController
     file_id = nil unless file_id.to_s =~ Api::ID_REGEX
 
     #if the relative path matches the given file id use that file
-    if file_id && @attachment = @context.attachments.find_by_id(file_id)
+    if file_id && @attachment = @context.attachments.where(id: file_id).first
       unless @attachment.matches_full_display_path?(path) || @attachment.matches_full_path?(path)
         @attachment = nil
       end
@@ -697,7 +707,6 @@ class FilesController < ApplicationController
       @group = @asset.group_category.group_for(@current_user) if @asset.has_group_category?
       @context = @group || @current_user
       @check_quota = false
-      @attachment.submission_attachment = true
     elsif @context && intent == 'attach_discussion_file'
       permission_object = @context.discussion_topics.scoped.new
       permission = :attach
@@ -726,7 +735,7 @@ class FilesController < ApplicationController
       @attachment.workflow_state = workflow_state
       if @context.respond_to?(:folders)
         if params[:attachment][:folder_id].present?
-          @folder = @context.folders.active.find_by_id(params[:attachment][:folder_id])
+          @folder = @context.folders.active.where(id: params[:attachment][:folder_id]).first
         end
         @folder ||= Folder.unfiled_folder(@context)
         @attachment.folder_id = @folder.id
@@ -752,7 +761,7 @@ class FilesController < ApplicationController
   def s3_success
     if params[:id].present?
       verify_api_id
-      @attachment = Attachment.find_by_id_and_workflow_state_and_uuid(params[:id], 'unattached', params[:uuid])
+      @attachment = Attachment.where(id: params[:id], workflow_state: 'unattached', uuid: params[:uuid]).first
     end
     details = @attachment.s3object.head rescue nil
     if @attachment && details
@@ -782,7 +791,7 @@ class FilesController < ApplicationController
   end
 
   def api_create_success
-    @attachment = Attachment.find_by_id_and_uuid(params[:id], params[:uuid])
+    @attachment = Attachment.where(id: params[:id], uuid: params[:uuid]).first
     return render(:nothing => true, :status => :bad_request) unless @attachment.try(:file_state) == 'deleted'
     duplicate_handling = check_duplicate_handling_option(request.params)
     return unless duplicate_handling
@@ -808,7 +817,7 @@ class FilesController < ApplicationController
   end
 
   def api_file_status
-    @attachment = Attachment.find_by_id_and_uuid!(params[:id], params[:uuid])
+    @attachment = Attachment.where(id: params[:id], uuid: params[:uuid]).first!
     if @attachment.file_state == 'available'
       render :json => { :upload_status => 'ready', :attachment => attachment_json(@attachment, @current_user) }
     elsif @attachment.file_state == 'deleted'
@@ -820,7 +829,7 @@ class FilesController < ApplicationController
 
   def create
     if (folder_id = params[:attachment].delete(:folder_id)) && folder_id.present?
-      @folder = @context.folders.active.find_by_id(folder_id)
+      @folder = @context.folders.active.where(id: folder_id).first
     end
     @folder ||= Folder.unfiled_folder(@context)
     params[:attachment][:uploaded_data] ||= params[:attachment_uploaded_data]
@@ -830,7 +839,7 @@ class FilesController < ApplicationController
     params[:attachment].delete :context_type
     duplicate_handling = params.delete :duplicate_handling
     if (unattached_attachment_id = params[:attachment].delete(:unattached_attachment_id)) && unattached_attachment_id.present?
-      @attachment = @context.attachments.find_by_id_and_workflow_state(unattached_attachment_id, 'unattached')
+      @attachment = @context.attachments.where(id: unattached_attachment_id, workflow_state: 'unattached').first
     end
     @attachment ||= @context.attachments.build
     if authorized_action(@attachment, @current_user, :create)
@@ -845,7 +854,7 @@ class FilesController < ApplicationController
         success = nil
         if params[:attachment] && params[:attachment][:source_attachment_id]
           a = Attachment.find(params[:attachment].delete(:source_attachment_id))
-          if a.root_attachment_id && att = @folder.attachments.find_by_id(a.root_attachment_id)
+          if a.root_attachment_id && att = @folder.attachments.where(id: a.root_attachment_id).first
             @attachment = att
             success = true
           elsif a.grants_right?(@current_user, session, :download)
@@ -1016,7 +1025,7 @@ class FilesController < ApplicationController
   def image_thumbnail
     cancel_cache_buster
     url = Rails.cache.fetch(['thumbnail_url', params[:uuid], params[:size]].cache_key, :expires_in => 30.minutes) do
-      attachment = Attachment.active.find_by_id_and_uuid(params[:id], params[:uuid]) if params[:id].present?
+      attachment = Attachment.active.where(id: params[:id], uuid: params[:uuid]).first if params[:id].present?
       thumb_opts = params.slice(:size)
       url = attachment.thumbnail_url(thumb_opts) rescue nil
       url ||= '/images/no_pic.gif'
@@ -1030,7 +1039,7 @@ class FilesController < ApplicationController
   def show_thumbnail
     if Attachment.local_storage?
       cancel_cache_buster
-      thumbnail = Thumbnail.find_by_id_and_uuid(params[:id], params[:uuid]) if params[:id].present?
+      thumbnail = Thumbnail.where(id: params[:id], uuid: params[:uuid]).first if params[:id].present?
       raise ActiveRecord::RecordNotFound unless thumbnail
       send_file thumbnail.full_filename, :content_type => thumbnail.content_type
     else
@@ -1044,7 +1053,7 @@ class FilesController < ApplicationController
     json = {
       :attachment => attachment.as_json(
         allow: :uuid,
-        methods: [:uuid,:readable_size,:mime_class,:currently_locked,:scribdable?,:thumbnail_url],
+        methods: [:uuid,:readable_size,:mime_class,:currently_locked,:thumbnail_url],
         permissions: {user: @current_user, session: session},
         include_root: false
       ),

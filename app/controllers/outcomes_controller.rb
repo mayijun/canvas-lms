@@ -25,6 +25,8 @@ class OutcomesController < ApplicationController
   def index
     if authorized_action(@context, @current_user, :read)
       return unless tab_enabled?(@context.class::TAB_OUTCOMES)
+      log_asset_access("outcomes:#{@context.asset_string}", "outcomes", "other")
+
       @root_outcome_group = @context.root_outcome_group
       if common_core_group_id = Setting.get(AcademicBenchmark.common_core_setting_key, nil)
         common_core_group_id = common_core_group_id.to_i
@@ -53,6 +55,8 @@ class OutcomesController < ApplicationController
 
     @outcome = @context.linked_learning_outcomes.find(params[:id])
     if authorized_action(@context, @current_user, :manage_outcomes)
+      log_asset_access(@outcome, "outcomes", "outcomes")
+
       codes = [@context].map(&:asset_string)
       if @context.is_a?(Account)
         if @context == @outcome.context
@@ -137,7 +141,7 @@ class OutcomesController < ApplicationController
       # (adopt_outcome_link) and adding a new link (add_outcome). as is, you
       # can't add a second link to the same outcome under a new group. but just
       # refactoring the model layer for now...
-      if outcome_link = @group.child_outcome_links.find_by_content_id(@outcome.id)
+      if outcome_link = @group.child_outcome_links.where(content_id: @outcome.id).first
         @group.adopt_outcome_link(outcome_link)
       else
         @group.add_outcome(@outcome)
@@ -258,11 +262,11 @@ class OutcomesController < ApplicationController
         # the id of a link to a foreign outcome. therefore it's possible to
         # intend to delete a link to a foreign but accidentally delete a
         # completely unrelated native outcome. needs to be decoupled.
-        if params[:id].present? && @outcome = @context.created_learning_outcomes.find_by_id(params[:id])
+        if params[:id].present? && @outcome = @context.created_learning_outcomes.where(id: params[:id]).first
           @outcome.destroy
           flash[:notice] = t :successful_outcome_delete, "Outcome successfully deleted"
           format.json { render :json => @outcome }
-        elsif params[:id].present? && @link = @context.learning_outcome_links.find_by_id(params[:id])
+        elsif params[:id].present? && @link = @context.learning_outcome_links.where(id: params[:id]).first
           @link.destroy
           flash[:notice] = t :successful_outcome_removal, "Outcome successfully removed"
           format.json { render :json => @link.learning_outcome }

@@ -194,6 +194,7 @@ class ProfileController < ApplicationController
       return unless @user == @current_user || authorized_action(@user, @current_user, :view_statistics)
     else
       @user = @current_user
+      @user.dismiss_bouncing_channel_message!
     end
     @user_data = profile_data(@user.profile, @current_user, session, [])
     @channels = @user.communication_channels.unretired
@@ -338,7 +339,7 @@ class ProfileController < ApplicationController
       if @user.update_attributes(params[:user])
         pseudonymed = false
         if params[:default_email_id].present?
-          @email_channel = @user.communication_channels.email.find_by_id(params[:default_email_id])
+          @email_channel = @user.communication_channels.email.where(id: params[:default_email_id]).first
           @email_channel.move_to_top if @email_channel
         end
         if params[:pseudonym]

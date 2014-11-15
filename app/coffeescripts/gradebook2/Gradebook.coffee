@@ -463,7 +463,7 @@ define [
             break
           params =
             student_ids: (student.id for student in students)
-            response_fields: ['id', 'user_id', 'url', 'score', 'grade', 'submission_type', 'submitted_at', 'assignment_id', 'grade_matches_current_submission', 'attachments', 'late']
+            response_fields: ['id', 'user_id', 'url', 'score', 'grade', 'submission_type', 'submitted_at', 'assignment_id', 'grade_matches_current_submission', 'attachments', 'late', 'workflow_state']
           $.ajaxJSON(@options.submissions_url, "GET", params, @gotSubmissionsChunk)
           @chunk_start += @options.chunk_size
 
@@ -537,6 +537,9 @@ define [
         assignment = @assignments[submission.assignment_id]
         if !assignment?
           @staticCellFormatter(row, col, '')
+        # reverted until Quiz Icon pending review workflow_state thing is resolved
+        #else if submission.workflow_state == 'pending_review'
+        #  (SubmissionCell[assignment.grading_type] || SubmissionCell).formatter(row, col, submission, assignment)
         else
           if assignment.grading_type == 'points' && assignment.points_possible
             SubmissionCell.out_of.formatter(row, col, submission, assignment)
@@ -736,6 +739,11 @@ define [
       $(@spinner.el).remove()
       $('#gradebook-grid-wrapper').show()
       @uid = @grid.getUID()
+      $('#content').focus ->
+        $('#accessibility_warning').removeClass('screenreader-only')
+      $('#accessibility_warning').focus ->
+        $('#accessibility_warning').blur ->
+          $('#accessibility_warning').remove()
       @$grid = grid = $('#gradebook_grid')
         .fillWindowWithMe({
           onResize: => @grid.resizeCanvas()

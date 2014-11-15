@@ -1,9 +1,20 @@
 @import base/environment
+@import "pages/shared/menu_tools.scss"
+@import "pages/shared/move_dialog"
 
 $backgroundColor: #dfe9f0
 $borderColor: #AAA
 $questionHeaderBackground: #F5F5F5
 $selectedBorderColor: #31b5ff
+
+.accessibility-warning
+  color: #fff
+  background-color: #DC3F3F
+  border: 1px dashed #fff
+  font-size: 12px
+  position: absolute
+  left: 0px
+  top: -16px
 
 #wrapper-container
   min-width: 1100px
@@ -19,8 +30,11 @@ $selectedBorderColor: #31b5ff
 li.quiz
   cursor: pointer
 
-  .ellipses
-    color: #7c7c7c
+  .ellipses, i[class^=icon-]:not(.icon-publish):not(.icon-quiz)
+    @if $use_high_contrast 
+      color: $canvas-neutral
+    @else 
+      color: darken($canvas-neutral, 40)
 
   .ig-title
     right: 554px
@@ -147,8 +161,7 @@ div#content
   border-bottom: 1px solid #a4a4a4
   overflow: hidden
   padding: 15px
-
-  h2
+  h1,h2
     margin-top: 0
     font-weight: 500
 
@@ -316,10 +329,10 @@ div#content
     :border-left 1px solid #aaa
   .group_top
     border: 1px solid #aaa
-    padding: 5px 10px
-    overflow: hidden
+    padding: 8px 10px 3px 10px
     background-color: #eee
     clear: both
+    position: relative
     .quiz_group_form
       margin: 0
     &.question_bank_top
@@ -338,14 +351,14 @@ div#content
     .move
       :width 20px
       :height 20px
-      .move_icon
-        :display none
+      :float left
+      :margin-right 7px
+      .draggable-handle
+        color: #888
+        cursor: pointer
     .group_display.hidden
       :display none
     &.hover
-      .move .move_icon
-        :display inline
-        :cursor move
       .links
         opacity: 1
     &.editing
@@ -439,10 +452,9 @@ div#content
     width: 16px
     height: 16px
     padding: 2px
-
-    .move_icon
-      :display none
-      :cursor move
+    .draggable-handle
+      color: #888
+      cursor: pointer
   .header
     :font-size 1.2em
     :font-weight bold
@@ -934,7 +946,7 @@ ul#quiz_versions
   .form
     padding: 1em
   #quiz_title
-    margin-top: 5px
+      margin-top: 5px
   .title #quiz_title
     width: 430px
   #student_submissions_warning,
@@ -1741,3 +1753,25 @@ ul#quiz_versions
     cursor: move
   .links a
     left: 0
+
+li.quiz.quiz-loading-overrides
+  // totally hide the content of the "Available" column
+  .date-available
+    visibility: hidden
+
+  // hide the content of the "Due" column, but show the spinner instead:
+  .date-due
+    min-height: inherit
+    height: 20px
+    overflow: hidden
+
+  // Spinner hax:
+  .date-due:before
+    content: "\00a0"
+    display: block
+    background-image: url("/images/ajax-loader-black-on-white.gif")
+    background-color: white
+    background-position: 90% 50%
+    background-repeat: no-repeat
+    opacity: 0.35
+    width: 100%

@@ -21,6 +21,23 @@
 
 module Lti
   class SubstitutionsHelper
+    LIS_ROLE_MAP = {
+        'user' => LtiOutbound::LTIRoles::System::USER,
+        'siteadmin' => LtiOutbound::LTIRoles::System::SYS_ADMIN,
+
+        'teacher' => LtiOutbound::LTIRoles::Institution::INSTRUCTOR,
+        'student' => LtiOutbound::LTIRoles::Institution::STUDENT,
+        'admin' => LtiOutbound::LTIRoles::Institution::ADMIN,
+        AccountUser => LtiOutbound::LTIRoles::Institution::ADMIN,
+
+        StudentEnrollment => LtiOutbound::LTIRoles::Context::LEARNER,
+        TeacherEnrollment => LtiOutbound::LTIRoles::Context::INSTRUCTOR,
+        TaEnrollment => LtiOutbound::LTIRoles::Context::TEACHING_ASSISTANT,
+        DesignerEnrollment => LtiOutbound::LTIRoles::Context::CONTENT_DEVELOPER,
+        ObserverEnrollment => LtiOutbound::LTIRoles::Context::OBSERVER,
+        StudentViewEnrollment => LtiOutbound::LTIRoles::Context::LEARNER
+    }
+
     def initialize(context, root_account, user)
       @context = context
       @root_account = root_account
@@ -43,16 +60,29 @@ module Lti
       enrollments.map { |enrollment| Lti::LtiUserCreator::ENROLLMENT_MAP[enrollment.class] }.uniq
     end
 
+    def all_roles
+      if @user
+        context_roles = course_enrollments.map { |enrollment| LIS_ROLE_MAP[enrollment.class] }
+        institution_roles = @user.roles.map { |role| LIS_ROLE_MAP[role] }
+        if Account.site_admin.account_users_for(@user).present?
+          institution_roles << LIS_ROLE_MAP['siteadmin']
+        end
+        (context_roles + institution_roles).uniq.sort.join(',')
+      else
+        [LtiOutbound::LTIRoles::System::NONE]
+      end
+    end
+
     def course_enrollments
-      return [] unless @context.is_a?(Course)
+      return [] unless @context.is_a?(Course) && @user
       @current_course_enrollments ||= @context.current_enrollments.where(user_id: @user.id)
     end
 
     def account_enrollments
       unless @current_account_enrollments
         @current_account_enrollments = []
-        if @user && @context.respond_to?(:account_chain) && !@context.account_chain_ids.empty?
-          @current_account_enrollments = AccountUser.where(user_id: @user.id, account_id: @context.account_chain_ids).shard(@context.shard)
+        if @user && @context.respond_to?(:account_chain) && !@context.account_chain.empty?
+          @current_account_enrollments = AccountUser.where(user_id: @user, account_id: @context.account_chain).shard(@context.shard)
         end
       end
       @current_account_enrollments
@@ -60,16 +90,16 @@ module Lti
 
     def current_lis_roles
       enrollments = course_enrollments + account_enrollments
-      enrollments.size > 0 ? enrollments_to_lis_roles(enrollments).join(',') : LtiOutbound::LTIRole::NONE
+      enrollments.size > 0 ? enrollments_to_lis_roles(enrollments).join(',') : LtiOutbound::LTIRoles::System::NONE
     end
 
     def concluded_course_enrollments
       @concluded_course_enrollments ||=
-          @context.is_a?(Course) ? @user.concluded_enrollments.where(course_id: @context.id).shard(@context.shard) : []
+          @context.is_a?(Course) && @user ? @user.concluded_enrollments.where(course_id: @context.id).shard(@context.shard) : []
     end
 
     def concluded_lis_roles
-      concluded_course_enrollments.size > 0 ? enrollments_to_lis_roles(concluded_course_enrollments).join(',') : LtiOutbound::LTIRole::NONE
+      concluded_course_enrollments.size > 0 ? enrollments_to_lis_roles(concluded_course_enrollments).join(',') : LtiOutbound::LTIRoles::System::NONE
     end
 
     def current_canvas_roles
@@ -77,9 +107,27 @@ module Lti
     end
 
     def enrollment_state
-      enrollments = @context.enrollments.where(user_id: @user.id)
+      enrollments = @user ? @context.enrollments.where(user_id: @user.id) : []
       return '' if enrollments.size == 0
       enrollments.any? { |membership| membership.state_based_on_date == :active } ? LtiOutbound::LTIUser::ACTIVE_STATE : LtiOutbound::LTIUser::INACTIVE_STATE
     end
+
+    def previous_lti_context_ids
+      previous_course_ids_and_context_ids.map(&:lti_context_id).compact.join(',')
+    end
+
+    def previous_course_ids
+      previous_course_ids_and_context_ids.map(&:id).sort.join(',')
+    end
+
+    private
+
+    def previous_course_ids_and_context_ids
+      return [] unless @context.is_a?(Course)
+      @previous_ids ||= Course.where(ContentMigration.where(context_id: @context.id, workflow_state: :imported)
+                                     .where("content_migrations.source_course_id = courses.id").exists)
+                                     .select("id, lti_context_id")
+    end
+
   end
 end

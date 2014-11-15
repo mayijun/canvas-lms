@@ -19,6 +19,10 @@
 require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
 
 describe Quizzes::QuizQuestionsController do
+  before :once do
+    Account.default.enable_feature!(:draft_state)
+  end
+
   def course_quiz(active=false)
     @quiz = @course.quizzes.create
     @quiz.workflow_state = "available" if active
@@ -66,10 +70,10 @@ describe Quizzes::QuizQuestionsController do
           }
         }
       }
-      assigns[:question].should_not be_nil
-      assigns[:question].question_data.should_not be_nil
-      assigns[:question].question_data[:answers].length.should eql(2)
-      assigns[:quiz].should eql(@quiz)
+      expect(assigns[:question]).not_to be_nil
+      expect(assigns[:question].question_data).not_to be_nil
+      expect(assigns[:question].question_data[:answers].length).to eql(2)
+      expect(assigns[:quiz]).to eql(@quiz)
     end
     it "should preserve ids, if provided, on create" do
       user_session(@teacher)
@@ -93,23 +97,37 @@ describe Quizzes::QuizQuestionsController do
           }
         ]
       }
-      assigns[:question].should_not be_nil
-      assigns[:question].question_data.should_not be_nil
+      expect(assigns[:question]).not_to be_nil
+      expect(assigns[:question].question_data).not_to be_nil
       data = assigns[:question].question_data[:answers]
 
-      data.length.should eql(3)
-      data[0][:id].should eql(123456)
-      data[1][:id].should eql(654321)
-      data[2][:id].should_not eql(654321)
+      expect(data.length).to eql(3)
+      expect(data[0][:id]).to eql(123456)
+      expect(data[1][:id]).to eql(654321)
+      expect(data[2][:id]).not_to eql(654321)
+    end
+
+    it 'bounces data thats too long' do
+      long_data = "abcdefghijklmnopqrstuvwxyz"
+      16.times do
+        long_data = "#{long_data}abcdefghijklmnopqrstuvwxyz#{long_data}"
+      end
+      user_session(@teacher)
+      xhr :post, 'create', course_id: @course.id, quiz_id: @quiz, question: {
+        question_text: long_data
+      }
+      expect(response.body).to match /max length is 16384/
     end
   end
 
   describe "PUT 'update'" do
     before(:once) { quiz_question }
+
     it "should require authorization" do
       put 'update', :course_id => @course.id, :quiz_id => @quiz, :id => @question.id, :question => {}
       assert_unauthorized
     end
+
     it "should update a quiz question" do
       user_session(@teacher)
       put 'update', :course_id => @course.id, :quiz_id => @quiz, :id => @question.id, :question => {
@@ -129,11 +147,12 @@ describe Quizzes::QuizQuestionsController do
           }
         }
       }
-      assigns[:question].should_not be_nil
-      assigns[:question].question_data.should_not be_nil
-      assigns[:question].question_data[:answers].length.should eql(3)
-      assigns[:quiz].should eql(@quiz)
+      expect(assigns[:question]).not_to be_nil
+      expect(assigns[:question].question_data).not_to be_nil
+      expect(assigns[:question].question_data[:answers].length).to eql(3)
+      expect(assigns[:quiz]).to eql(@quiz)
     end
+
     it "should preserve ids, if provided, on update" do
       user_session(@teacher)
       put 'update', :course_id => @course.id, :quiz_id => @quiz, :id => @question.id, :question => {
@@ -156,14 +175,25 @@ describe Quizzes::QuizQuestionsController do
           }
         }
       }
-      assigns[:question].should_not be_nil
-      assigns[:question].question_data.should_not be_nil
+      expect(assigns[:question]).not_to be_nil
+      expect(assigns[:question].question_data).not_to be_nil
       data = assigns[:question].question_data[:answers]
-      data.length.should eql(3)
-      data[0][:id].should eql(123456)
-      data[1][:id].should eql(654321)
-      data[2][:id].should_not eql(654321)
+      expect(data.length).to eql(3)
+      expect(data[0][:id]).to eql(123456)
+      expect(data[1][:id]).to eql(654321)
+      expect(data[2][:id]).not_to eql(654321)
+    end
+
+    it 'bounces data thats too long' do
+      long_data = "abcdefghijklmnopqrstuvwxyz"
+      16.times do
+        long_data = "#{long_data}abcdefghijklmnopqrstuvwxyz#{long_data}"
+      end
+      user_session(@teacher)
+      xhr :put, 'update', course_id: @course.id, quiz_id: @quiz, id: @question.id, question: {
+        question_text: long_data
+      }
+      expect(response.body).to match /max length is 16384/
     end
   end
 end
-

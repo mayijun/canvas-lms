@@ -26,11 +26,39 @@ shared_examples_for "course copy" do
     @cm.reload
     if @cm.migration_settings[:last_error]
       er = ErrorReport.last
-      "#{er.message} - #{er.backtrace}".should == ""
+      expect("#{er.message} - #{er.backtrace}").to eq ""
     end
-    @cm.warnings.should == warnings
-    @cm.workflow_state.should == 'imported'
+    expect(@cm.warnings).to eq warnings
+    expect(@cm.workflow_state).to eq 'imported'
     @copy_to.reload
+  end
+
+  def run_export
+    export = @copy_from.content_exports.build
+    export.export_type = ContentExport::COMMON_CARTRIDGE
+    export.user = @teacher
+    yield(export) if block_given?
+    export.save
+    export.export_course
+    expect(export.workflow_state).to eq 'exported'
+    expect(export.attachment_id).not_to be_nil
+    export
+  end
+
+  def run_import(export_attachment_id)
+    @cm.set_default_settings
+    @cm.migration_type = 'canvas_cartridge_importer'
+    worker = Canvas::Migration::Worker::CCWorker.new
+    @cm.attachment_id = export_attachment_id
+    @cm.skip_job_progress = true
+    worker.perform(@cm)
+    expect(@cm.workflow_state).to eq 'imported'
+    @copy_to.reload
+  end
+
+  def run_export_and_import(&block)
+    export = run_export(&block)
+    run_import(export.attachment_id)
   end
 
   def make_grading_standard(context, opts = {})
@@ -60,8 +88,9 @@ shared_examples_for "course copy" do
     lo
   end
 
-  def create_rubric_asmnt
-    @rubric = @copy_from.rubrics.new
+  def create_rubric_asmnt(rubric_context = nil)
+    rubric_context ||= @copy_from
+    @rubric = rubric_context.rubrics.new
     @rubric.title = "Rubric"
     @rubric.data = [{:ratings=>[{:criterion_id=>"309_6312", :points=>5.5, :description=>"Full Marks", :id=>"blank", :long_description=>""}, {:criterion_id=>"309_6312", :points=>0, :description=>"No Marks", :id=>"blank_2", :long_description=>""}], :points=>5.5, :description=>"Description of criterion", :id=>"309_6312", :long_description=>""}]
     @rubric.save!

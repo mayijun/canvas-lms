@@ -109,10 +109,10 @@ class CommunicationChannelsController < ApplicationController
   #
   # Creates a new communication channel for the specified user.
   #
-  # @argument communication_channel[address] [String]
+  # @argument communication_channel[address] [Required, String]
   #   An email address or SMS number.
   #
-  # @argument communication_channel[type] [String, "email"|"sms"|"push"]
+  # @argument communication_channel[type] [Required, String, "email"|"sms"|"push"]
   #   The type of communication channel.
   #
   #   In order to enable push notification support, the server must be
@@ -121,7 +121,7 @@ class CommunicationChannelsController < ApplicationController
   #   the access token from this request must have an SNS ARN configured on
   #   it.
   #
-  # @argument skip_confirmation [Optional, Boolean]
+  # @argument skip_confirmation [Boolean]
   #   Only valid for site admins and account admins making requests; If true, the channel is
   #   automatically validated and no confirmation email or SMS is sent.
   #   Otherwise, the user must respond to a confirmation message to confirm the
@@ -170,7 +170,7 @@ class CommunicationChannelsController < ApplicationController
 
     # Find or create the communication channel.
     @cc ||= @user.communication_channels.by_path(params[:communication_channel][:address]).
-      find_by_path_type(params[:communication_channel][:type])
+      where(path_type: params[:communication_channel][:type]).first
     @cc ||= @user.communication_channels.build(:path => params[:communication_channel][:address],
       :path_type => params[:communication_channel][:type])
 
@@ -202,7 +202,7 @@ class CommunicationChannelsController < ApplicationController
     if cc
       @communication_channel = cc
       @user = cc.user
-      @enrollment = @user.enrollments.find_by_uuid_and_workflow_state(params[:enrollment], 'invited') if params[:enrollment].present?
+      @enrollment = @user.enrollments.where(uuid: params[:enrollment], workflow_state: 'invited').first if params[:enrollment].present?
       @course = @enrollment && @enrollment.course
       @root_account = @course.root_account if @course
       @root_account ||= @user.pseudonyms.first.try(:account) if @user.pre_registered?
@@ -312,7 +312,7 @@ class CommunicationChannelsController < ApplicationController
         @pseudonym ||= @root_account.pseudonyms.build(:user => @user, :unique_id => cc.path) if @user.creation_pending?
         # We create the pseudonym with unique_id = cc.path, but if that unique_id is taken, just nil it out and make the user come
         # up with something new
-        @pseudonym.unique_id = '' if @pseudonym && @pseudonym.new_record? && @root_account.pseudonyms.active.custom_find_by_unique_id(@pseudonym.unique_id)
+        @pseudonym.unique_id = '' if @pseudonym && @pseudonym.new_record? && @root_account.pseudonyms.active.by_unique_id(@pseudonym.unique_id).first
 
         # Have to either have a pseudonym to register with, or be looking at merge opportunities
         return render :action => 'confirm_failed', :status => :bad_request if !@pseudonym && @merge_opportunities.empty?

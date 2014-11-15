@@ -86,6 +86,12 @@ class DiscussionEntry < ActiveRecord::Base
     p.whenever { |record|
       record.just_created && record.active?
     }
+
+    p.dispatch :announcement_reply
+    p.to { discussion_topic.user }
+    p.whenever { |record|
+      record.discussion_topic.is_announcement && record.just_created && record.active?
+    }
   end
 
   on_create_send_to_streams do
@@ -272,7 +278,7 @@ class DiscussionEntry < ActiveRecord::Base
     given { |user, session| self.context.grants_right?(user, session, :read_forum) }
     can :read
 
-    given { |user, session| self.context.grants_right?(user, session, :post_to_forum) && self.discussion_topic.available_for?(user) }
+    given { |user, session| self.context.grants_right?(user, session, :post_to_forum) && !self.discussion_topic.closed_for_comment_for?(user) }
     can :reply and can :create and can :read
 
     given { |user, session| self.context.grants_right?(user, session, :post_to_forum) }
@@ -281,13 +287,13 @@ class DiscussionEntry < ActiveRecord::Base
     given { |user, session| context.respond_to?(:allow_student_forum_attachments) && context.allow_student_forum_attachments && context.grants_right?(user, session, :post_to_forum) && discussion_topic.available_for?(user) }
     can :attach
 
-    given { |user, session| !self.discussion_topic.root_topic_id && self.context.grants_right?(user, session, :moderate_forum) && self.discussion_topic.available_for?(user) }
+    given { |user, session| !self.discussion_topic.root_topic_id && self.context.grants_right?(user, session, :moderate_forum) && !self.discussion_topic.closed_for_comment_for?(user) }
     can :update and can :delete and can :reply and can :create and can :read and can :attach
 
     given { |user, session| !self.discussion_topic.root_topic_id && self.context.grants_right?(user, session, :moderate_forum) }
     can :update and can :delete and can :read
 
-    given { |user, session| self.discussion_topic.root_topic && self.discussion_topic.root_topic.context.grants_right?(user, session, :moderate_forum) && self.discussion_topic.available_for?(user) }
+    given { |user, session| self.discussion_topic.root_topic && self.discussion_topic.root_topic.context.grants_right?(user, session, :moderate_forum) && !self.discussion_topic.closed_for_comment_for?(user) }
     can :update and can :delete and can :reply and can :create and can :read and can :attach
 
     given { |user, session| self.discussion_topic.root_topic && self.discussion_topic.root_topic.context.grants_right?(user, session, :moderate_forum) }
@@ -364,7 +370,7 @@ class DiscussionEntry < ActiveRecord::Base
       if self.user
         my_entry_participant = self.discussion_entry_participants.create(:user => self.user, :workflow_state => "read")
 
-        topic_participant = self.discussion_topic.discussion_topic_participants.find_by_user_id(self.user.id)
+        topic_participant = self.discussion_topic.discussion_topic_participants.where(user_id: self.user).first
         if topic_participant.blank?
           new_count = self.discussion_topic.default_unread_count - 1
           topic_participant = self.discussion_topic.discussion_topic_participants.create(:user => self.user,

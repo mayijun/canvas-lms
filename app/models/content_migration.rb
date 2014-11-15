@@ -32,6 +32,7 @@ class ContentMigration < ActiveRecord::Base
   has_one :job_progress, :class_name => 'Progress', :as => :context
   serialize :migration_settings
   cattr_accessor :export_file_path
+  after_save :handle_import_in_progress_notice
   DATE_FORMAT = "%m/%d/%Y"
 
   attr_accessible :context, :migration_settings, :user, :source_course, :copy_options, :migration_type, :initiated_source
@@ -379,11 +380,7 @@ class ContentMigration < ActiveRecord::Base
   def check_quiz_id_prepender
     return unless self.context.respond_to?(:assessment_questions)
     if !migration_settings[:id_prepender] && (!migration_settings[:overwrite_questions] || !migration_settings[:overwrite_quizzes])
-      # only prepend an id if the course already has some migrated questions/quizzes
-      if self.context.assessment_questions.where('assessment_questions.migration_id IS NOT NULL').exists? ||
-         (self.context.respond_to?(:quizzes) && self.context.quizzes.where('quizzes.migration_id IS NOT NULL').exists?)
-        migration_settings[:id_prepender] = self.id
-      end
+      migration_settings[:id_prepender] = self.id
     end
   end
 
@@ -391,17 +388,28 @@ class ContentMigration < ActiveRecord::Base
     migration_settings[:migration_ids_to_import] && migration_settings[:migration_ids_to_import][:copy] && migration_settings[:migration_ids_to_import][:copy][val]
   end
 
-  def import_object?(asset_type, mig_id)
-    return false unless mig_id
+  def import_everything?
     return true unless migration_settings[:migration_ids_to_import] && migration_settings[:migration_ids_to_import][:copy] && migration_settings[:migration_ids_to_import][:copy].length > 0
     return true if is_set?(to_import(:everything))
     return true if copy_options && copy_options[:everything]
+    false
+  end
+
+  def import_object?(asset_type, mig_id)
+    return false unless mig_id
+    return true if import_everything?
 
     return true if is_set?(to_import("all_#{asset_type}"))
 
     return false unless to_import(asset_type).present?
 
     is_set?(to_import(asset_type)[mig_id])
+  end
+
+  def import_object!(asset_type, mig_id)
+    return if import_everything?
+    migration_settings[:migration_ids_to_import][:copy][asset_type] ||= {}
+    migration_settings[:migration_ids_to_import][:copy][asset_type][mig_id] = '1'
   end
 
   def is_set?(option)
@@ -469,6 +477,18 @@ class ContentMigration < ActiveRecord::Base
 
   def for_course_copy?
     self.migration_type && self.migration_type == 'course_copy_importer'
+  end
+
+  def check_cross_institution
+    return unless self.context.is_a?(Course)
+    data = self.context.full_migration_hash
+    return unless data
+    source_root_account_uuid = data[:course] && data[:course][:root_account_uuid]
+    @cross_institution = source_root_account_uuid && source_root_account_uuid != self.context.root_account.uuid
+  end
+
+  def cross_institution?
+    @cross_institution
   end
 
   def set_date_shift_options(opts)
@@ -605,6 +625,33 @@ class ContentMigration < ActiveRecord::Base
     end
   end
 
+  # maps the key in the copy parameters hash to the asset string prefix
+  # (usually it's just .singularize; weird names needing special casing go here :P)
+  def self.asset_string_prefix(key)
+    case key
+    when 'quizzes'
+      'quizzes:quiz'
+    else
+      key.singularize
+    end
+  end
+
+  def self.collection_name(key)
+    key = key.to_s
+    case key
+    when 'modules'
+      'context_modules'
+    when 'module_items'
+      'content_tags'
+    when 'pages'
+      'wiki_pages'
+    when 'files'
+      'attachments'
+    else
+      key
+    end
+  end
+
   # strips out the "id_" prepending the migration ids in the form
   # also converts arrays of migration ids (or real ids for course exports) into the old hash format
   def self.process_copy_params(hash, for_content_export=false, return_asset_strings=false)
@@ -617,6 +664,7 @@ class ContentMigration < ActiveRecord::Base
     new_hash = {}
 
     hash.each do |key, value|
+      key = collection_name(key)
       case value
       when Hash # e.g. second level in :copy => {:context_modules => {:id_100 => true, etc}}
         new_sub_hash = {}
@@ -637,7 +685,7 @@ class ContentMigration < ActiveRecord::Base
         # or :select => {:context_modules => [blahblahblah, blahblahblah2]} for normal migration ids
         sub_hash = {}
         if for_content_export
-          asset_type = key.to_s.singularize
+          asset_type = asset_string_prefix(key.to_s)
           value.each do |id|
             sub_hash[process_key.call("#{asset_type}_#{id}")] = '1'
           end
@@ -676,5 +724,15 @@ class ContentMigration < ActiveRecord::Base
 
   def find_external_tool_translation(migration_id)
     @external_tool_translation_map && migration_id && @external_tool_translation_map[migration_id]
+  end
+
+  def handle_import_in_progress_notice
+    return unless context.is_a?(Course) && is_set?(migration_settings[:import_in_progress_notice])
+    if (new_record? || (workflow_state_changed? && workflow_state_was == 'created')) &&
+        %w(pre_processing pre_processed exporting importing).include?(workflow_state)
+      context.add_content_notice(:import_in_progress, 4.hours)
+    elsif workflow_state_changed? && %w(pre_process_error exported imported failed).include?(workflow_state)
+      context.remove_content_notice(:import_in_progress)
+    end
   end
 end

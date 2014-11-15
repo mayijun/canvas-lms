@@ -1,3 +1,5 @@
+# This YAML file is auto-generated from a Transifex import.
+# Do not edit it by hand, your changes will be overwritten.
 --- 
 en-AU: 
   EditAppointmentGroupDetails: 
@@ -38,6 +40,14 @@ en-AU:
     no_file: "No outcome file or authority given"
     no_permissions: "User isn't allowed to edit global outcomes"
     no_perms: "User isn't allowed to edit global outcomes"
+    plugin_settings: 
+      api_url_description: "(e.g. %{url})"
+      common_core_guid: "(e.g. %{guid})"
+      description: "You will need access to an [Academic Benchmark](%{url}) account."
+      labels: 
+        api_key: "API Key"
+        api_url: "Api Url"
+        common_core_guid: "Common Core GUID (optional)"
   account: 
     account_settings: 
       account_surveys: "Account Surveys"
@@ -102,8 +112,10 @@ en-AU:
         auth_base: "CAS URL"
         auth_type: Type
         login_handle_name: "Login Label"
+        unknown_user_url: "Unknown User Url"
       login_handle_name_description: "The label used for unique login identifiers. Examples: Login, Username, Student ID, etc."
       save_button: "Save Authentication Settings"
+      unknown_user_url_description: "The url to redirect to when an authenticated user is not found in Canvas."
     index: 
       add_auth_desc: "Add an identity provider to this account:"
       canvas_login_tip: |-
@@ -122,7 +134,6 @@ en-AU:
       settings_description: "In order for a user to authenticate through an external identity provider (IdP), the user must have a login identifier that is both linked to this account and that matches the unique identifier returned by the IdP. To see a user's current logins, see the \"Login Information\" section on the user's profile page. (Found by searching for the user on the \"Users\" tab.)"
       settings_title: "Authentication Settings"
       test_ldap_link: "Test Authentication"
-      title: "Authentication Settings"
     ldap_settings: 
       add_secondary_ldap_server_link: "Add Secondary LDAP Server"
       auth_type_label: Type
@@ -210,6 +221,7 @@ en-AU:
         login_handle_name: "Login Label"
         position: Position
         requested_authn_context: "Authentication Context"
+        unkown_user_url: "Unknown User Url"
       log_in_url: "Log On URL"
       log_out_url: "Log Out URL"
       login_attribute: "Login Attribute"
@@ -224,6 +236,7 @@ en-AU:
       save_button: "Save Authentication Settings"
       start_debugging: "Start Debugging"
       stop_debugging: "Stop Debugging"
+      unkown_user_url_description: "The url to redirect to when an authenticated user is not found in Canvas."
     saml_testing: 
       auth_request_to_idp: "AuthnRequest sent to IdP"
       auth_response_from_idp: "AuthnResponse from IdP"
@@ -439,6 +452,7 @@ en-AU:
           restore_course: "Restore Courses"
         view_messages: "View Notifications"
       admin_tools_cumb: "Admin tools"
+      admin_tools_title: "Admin Tools"
       auth_logging_content_pane: 
         auth_logging: "User Login / Logout Activity"
       auth_logging_search_results: 
@@ -491,8 +505,9 @@ en-AU:
         time: Time
         user: User
       course_search_form: 
+        course_id: "Course ID"
         labels: 
-          find_deleted_course: "Find a deleted course"
+          find_deleted_course: "Search for a deleted course by ID"
         select_default: "Select a course"
         select_label: "Select a course"
       course_search_results: 
@@ -550,7 +565,7 @@ en-AU:
         generate_activity_username: "Generate Activity for *%{user}*"
         message_date_from: "From Date"
         message_date_to: "To Date"
-        search: Search
+        search: "Search for people by ID or name"
         search_people: "Search people"
     assignment_scheduling_csv_parameters: 
       account_reports: 
@@ -850,6 +865,9 @@ en-AU:
       headers: 
         report_last_run: "Last Run"
         report_name: Name
+      headings: 
+        sections: Reports
+        settings: "Account Settings"
       help_link_available_to_all_admins: Admins
       help_link_available_to_all_students: Students
       help_link_available_to_all_teachers: Teachers
@@ -886,6 +904,7 @@ en-AU:
         help_link_subtext: Sub-text
         help_link_text: "Text to display for link"
         help_link_url: URL
+        login_handle_name: "Login Label"
         membership_type: "Add More"
         message: Message
         mfa_settings: "Multi-Factor Authentication"
@@ -919,6 +938,7 @@ en-AU:
         add_admins: "Add Account Admins"
         configure_report: Configure...
         run_report: "Run Report"
+      login_handle_name_placeholder: "ex: Login, Username, or Student ID"
       manual_quotas: 
         find_button: Find
         manual_quotas_title: "Manually Settable Quotas"
@@ -947,6 +967,7 @@ en-AU:
       open_registration_delegated_warning_message: "An external identity provider is enabled, and users created via open registration may not be able to log in unless the external identity provider's login form has a link back to %{url}."
       open_registration_delegated_warning_tooltip: "An External Identity Provider is Enabled"
       open_report_description: "Open Report Description"
+      page_header_title: "Account Settings"
       page_title: "Account Settings"
       quiz_ip_filters_delete: "Remove Filter"
       quiz_ip_filters_help_message: |-
@@ -1061,7 +1082,6 @@ en-AU:
           By default, UI changes have priority over SIS import changes; for a number of fields, the SIS import will not change that field's data if an admin has changed that field through the UI. If you select this option, this SIS import will override UI changes.  
           See the documentation for details.
       override_sis_stickiness_label: "Override UI changes"
-      page_header: "SIS Import"
       page_title: "SIS Import"
       pending_batches_count: 
         one: "%{count} batch waiting to be processed."
@@ -1114,6 +1134,11 @@ en-AU:
         one: "%{file_size} *from one file*"
         other: "%{file_size} *from %{count} files*"
       uploaded_file_storage_header: "Uploaded File Storage"
+    student_assessment_scores_csv_parameters: 
+      account_reports: 
+        orbis: 
+          parameters: 
+            note: "Courses with muted assignments may not accurately reflect scores in this report."
     student_assignment_outcome_map_csv_description: 
       account_reports: 
         student_assignment_map: 
@@ -1210,14 +1235,20 @@ en-AU:
         header: 
           one: "1 error prohibited this %{model} from being saved"
           other: "%{count} errors prohibited this %{model} from being saved"
+  add_module_item: 
+    add_assignment_to: "Add an assignment to %{module}"
+    add_file_to: "Add a files to %{module}"
+    add_page_to: "Add a pages to %{module}"
+    add_quiz_to: "Add a quizzes to %{module}"
+    add_topic_to: "Add discussion topics to %{module}"
   ajax_errors: 
     error_heading: "Ajax Error: %{status_code}"
     errors: 
       connection_lost: "Connection to %{host} was lost.  Please make sure you're connected to the Internet and try again."
-      timeout: "There was a problem with your request, possibly due to a long period of inactivity.  Please reload the page and try again."
       unhandled: "Oops! The last request didn't work out."
     links: 
       details: details...
+      login: Login
     no_text: "No text"
   alerts: 
     alert: 
@@ -1261,6 +1292,8 @@ en-AU:
       criteria_required: "At least one trigger is required"
       recipients_required: "At least one recipient is required"
       threshold_should_be_numeric: "This should be a positive number"
+  allow_lor_tools: "Allow users to view and use external tools configured for LOR."
+  allow_opt_out_of_inbox: "Allow users to opt out of the Conversation's Inbox. This will cause all conversation messages and notifications to be sent as ASAP notifications to the user's primary email, hide the Conversation's Inbox unread messages badge on the Inbox, and hide the Conversation's notification preferences."
   analytics: 
     course: 
       analytics: Analytics
@@ -1410,7 +1443,7 @@ en-AU:
     labels: 
       due: Due
     name_is_required: "Name is required!"
-    percentage_points_possible: "Points possible must be more than 0 for percentage grading"
+    points_possible_not_zero: "Points possible must be more than 0 for selected grading type"
     points_possible_number: "Points possible must be a number"
     select_external_tool_dialog_title: "Configure External Tool"
     submission_action_take_quiz: "Take %{title}"
@@ -1527,6 +1560,7 @@ en-AU:
       group_weight: "%{groupWeight}% of Total"
       manage: Manage
       move: "Move To…"
+      move_to_accessibility_warning: "Warning: for improved accessibility of reordering assignments and groups, please use the Move To Dialog option found in the menu."
     assignment_group_selector: 
       assignment_group: "Assignment Group"
       assignment_group_options: 
@@ -1676,11 +1710,11 @@ en-AU:
         delete_assignment_group: "You are about to delete *%{name}*, which has **%{assignment_count}** assignments in it."
       would_you_like: "Would you like to:"
     drop_highest_rule: 
-      one: "Drop the highest %{count} scores"
+      one: "Drop the highest score"
       other: "Drop the highest %{count} scores"
     drop_highest_scores: "Drop the Highest %{number} Scores"
     drop_lowest_rule: 
-      one: "Drop the lowest %{count} scores"
+      one: "Drop the lowest score"
       other: "Drop the lowest %{count} scores"
     drop_lowest_scores: "Drop the Lowest %{number} Scores"
     due_date_override: 
@@ -1699,6 +1733,7 @@ en-AU:
         not_published: "Not Published"
         published: Published
       manage_assignment: "Manage Assignment"
+      page_header_title: "New Assignment"
       titles: 
         delete: Delete
     edit_view: 
@@ -1775,7 +1810,7 @@ en-AU:
         pass_fail: Complete/Incomplete
         percent: Percentage
         points: Points
-      view_grading_levels: "View Grading Levels"
+      view_grading_scheme: "View Grading Scheme"
     group_category_selector: 
       grade_group_students_individually: "Assign Grades to Each Student Individually"
       group_assignment_header: "Group Assignment"
@@ -1935,7 +1970,7 @@ en-AU:
     remove_never_drop_rule: "Remove never drop rule"
     remove_unsaved_never_drop_rule: "Remove unsaved never drop rule"
     rules_text: 
-      one: "%{count} Rules"
+      one: "1 Rule"
       other: "%{count} Rules"
     select_assignment: "[Select Assignment]"
     show: 
@@ -1951,6 +1986,7 @@ en-AU:
         add_rubric: "Add Rubric"
         assign_rubric: "Assign Rubric"
         edit: Edit
+      manage: Manage
       messages: 
         locked: "This assignment is currently locked."
       new_assignment: "New Assignment"
@@ -2115,6 +2151,8 @@ en-AU:
           internet_check: "Internet Database"
           journal_check: "Journals, Periodicals, and Publications"
           student_paper_check: "Other Student Papers"
+          submit_papers_to: "Include in Repository"
+          turnitin_repository: "Turnitin Repository"
         originality_report_never: Never
         originality_report_visibility: "Students Can See the Originality Report"
         originality_report_visible_after_due_date: "After the Due Date"
@@ -2158,6 +2196,7 @@ en-AU:
         wizard_box: "I would like to:"
   assignments_api: 
     invalid_date_time: "Invalid datetime for %{attribute}"
+    invalid_submission_types: "Invalid submission types"
   attachment: 
     default_filename: File
     errors: 
@@ -2208,6 +2247,12 @@ en-AU:
     no_manifest: "This Blackboard .zip has no imsmanifest.xml file in the root directory."
   bookmark_service: 
     default_title: "No Title"
+  broccoli_cloud: 
+    label: 
+      published: Published
+      unpublished: Unpublished
+    published_title: Published
+    unpublished_title: Unpublished
   bulk_course_migration: 
     export_failed: "There was an error exporting the course with bb_lcid %{id} from Blackboard"
     export_failed_no_id: "There was an error importing a course"
@@ -2432,7 +2477,7 @@ en-AU:
         calendar_month: Month
         calendar_scheduler: Scheduler
         calendar_week: Week
-        screenreader_recommend_agenda: "Screenreader users: Use the Agenda to view events"
+        improved_accessibility_recommend_agenda: "Warning: For improved accessibility, please use the \"Agenda view\" Calendar."
       loading: Loading
       my_appointment_groups: "My Appointment Groups"
     calendar_navigator: 
@@ -2559,6 +2604,7 @@ en-AU:
     messages_sent: "Messages Sent"
     missing_due_date_dialog: 
       buttons: 
+        continue: Continue
         goBack: "Go Back"
         noDueDate: "No Due Date"
       modal: 
@@ -2748,6 +2794,7 @@ en-AU:
       feed_title: "Course Calendar Atom Feed"
       links: 
         feed: "click here to view the feed"
+      page_title_header: Calendar
       skip_to_calendar: "Skip to calendar"
       toggle_calendars: "Toggle calendars"
       toggle_undated_items: "Toggle undated items"
@@ -3006,6 +3053,7 @@ en-AU:
     inactive_error: "That conference is not currently active"
     index: 
       concluded_conferences: "Concluded Conferences"
+      conference_header: Conferences
       new_conference: "New Conference"
       new_conferences: "New Conferences"
       page_title: "Web Conferences"
@@ -3065,9 +3113,13 @@ en-AU:
         quiz: Quiz
       links: 
         download: "Course Export from %{date}: *Click here to download*"
+        download_file_export: "File Export from %{date}: *Click here to download*"
         download_qti: "QTI Export from %{date}: *Click here to download*"
+        download_user_export: "User Data Export from %{date}: *Click here to download*"
       message: 
         export_started: "The export process has started. This can take awhile for large courses. *You can leave the page* and you'll get an email when the export is complete."
+      no_submissions: "You currently have no submissions to export."
+      user_data_exports: "User Data Exports"
     labels: 
       new_export: "New Export:"
     links: 
@@ -3130,6 +3182,7 @@ en-AU:
   content_migration: 
     bad_attachment: "The file was not successfully uploaded."
     errors: 
+      cannot_shift_and_remove: "cannot specify shift_dates and remove_dates simultaneously"
       import_error: "Import Error:"
     missing_content_links_message: "The following references could not be resolved:"
     missing_content_links_title: "Missing links found in imported content"
@@ -3214,6 +3267,7 @@ en-AU:
         beginning_change_to: "change to"
         beginning_date: "Beginning date"
         checkbox_label: "Adjust events and due dates"
+        date_adjustment: "Date adjustment"
         ending_change_to: "change to"
         ending_date: "Ending date"
         new_end_date_label: "Change ending date to"
@@ -3224,6 +3278,8 @@ en-AU:
         old_end_date_title: "Ending date"
         old_start_date_label: "Beginning date"
         old_start_date_title: "Beginning date"
+        remove_dates: "Remove dates"
+        shift_dates: "Shift dates"
         substitution: Substitution
       day_substitution: 
         move_from: "Move from"
@@ -3249,7 +3305,6 @@ en-AU:
       question_bank: 
         aria_new_label: "Create new question bank"
         create_new_question: "-- Create new question bank --"
-        question_bank_label: "Question bank"
         question_bank_placeholder: "\"Question bank name\""
         question_bank_placeholder_aria: "\"Enter new question bank name\""
         question_bank_title: "New question bank name"
@@ -3654,6 +3709,7 @@ en-AU:
         modules: 
           before_students_view: "Before students can view this module"
         new_tab: "Load in a new tab"
+        publish_final_grade: "Publish final grade for the student when this module is completed"
         require_sequential_progress: "Students must move through requirements in this module in sequential order"
         sort_by: "Sort By"
         title: Title
@@ -3671,7 +3727,15 @@ en-AU:
       module: module
       module_details: "Modules are shown in sequential order, so only modules that are above %{name} can be set as prerequisites."
       module_name: "Module Name"
-      modules_keyboard_hint: "To change the order of the course modules and module items, first turn the cursor off on your screen reader. Insert-z in JAWS. Press tab to select the first module. Press up and down to choose a module or module item. Press space to select the module or module item to start dragging. Then press up and down to select a destination. Then press space a second time to drop selection after destination."
+      move_module: 
+        after: After
+        before: Before
+        or: OR
+        place: Place
+      move_module_item: 
+        into: into
+        or: OR
+        place: Place
       must_complete_prerequisites: "They must complete"
       no_preprequisites: "No prerequisites defined"
       no_requirements: "No requirements defined"
@@ -3745,9 +3809,11 @@ en-AU:
         text: 
           delete_module: Delete
           edit_module: Edit
+          move_module: "Move To..."
         title: 
           delete_module: "Delete this module"
           edit_module: Edit
+          move_module: "Move this module"
           student_progress: "See Student Progress for this Module"
       manager_module: "Manage module"
       module_will_unlock_at: "Will unlock *%{unlock_date}*"
@@ -3828,6 +3894,8 @@ en-AU:
         edit_item_details: "Edit item details"
         indent: "Increase indent"
         indent_item: "Increase indent"
+        move_item: "Move this item"
+        move_item_label: "Move this item"
         outdent: "Decrease indent"
         outdent_item: "Decrease indent"
         remove_item: Remove
@@ -3838,6 +3906,7 @@ en-AU:
       min_score: 
         fulfilled: "scored at least a %{score}"
         unfulfilled: "must score at least a %{score}"
+      modules_item_move_to: "Move to..."
       must_contribute: 
         fulfilled: "contributed to the content of the page"
         unfulfilled: "must contribute to the content of the page"
@@ -3974,6 +4043,7 @@ en-AU:
       mark_as_read: "Mark as read"
       mark_as_unread: "Mark as unread"
       more_options: "More options"
+      page_title_header: Conversations
       reply: Reply
       reply_all: "Reply all"
       search_by_user: "Search by user"
@@ -4000,30 +4070,13 @@ en-AU:
       unstar_conversation: "Unstar conversation"
     message_deleted: "Message Deleted!"
     message_detail: 
+      delete: Delete
+      forward: Forward
+      message_actions: "Message actions"
+      more_options: "More options"
       no_subject: "No subject"
-    message_form: 
-      buttons: 
-        reply: Reply
-        reply_all: "Reply all"
-        send_message: Send
-      headings: 
-        new_message: "New Message"
-      inbox_actions: 
-        add_people: "Add People"
-      labels: 
-        add_to_faculty_journal: "Add as a Faculty Journal entry"
-        group_conversation: "This is a group conversation. Participants will see everyone's replies"
-        message: "Message:"
-        to: "To:"
-      links: 
-        add_attachment: Attach
-        media_comment: Record
-      media_comment: "Media Comment"
-      titles: 
-        add_attachment: "Add an attachment"
-        media_comment: "Recorded media comment"
-        record_media_comment: "Record an audio or video comment"
-        remove_media_comment: "Remove media comment"
+      reply: Reply
+      reply_all: "Reply all"
     message_form_dialog: 
       body: Body
       headings: 
@@ -4074,7 +4127,6 @@ en-AU:
     other_recipients: 
       one: "and 1 other"
       other: "and %{count} others"
-    search_category: "Search %{category}"
     star: Star
     star_conversation: "Star conversation"
     titles: 
@@ -4089,6 +4141,9 @@ en-AU:
     batch_update_message: 
       one: "1 course processed"
       other: "%{count} courses processed"
+    course_format: 
+      not_set: "Not Set"
+      online: Online
     course_not_found: "The course was not found"
     csv: 
       comments: Comments
@@ -4180,6 +4235,8 @@ en-AU:
       topic: "Unknown topic"
       wiki_page: "Unknown wiki page"
   course_list: 
+    favorited_tooltip: "Click to remove from the courses menu."
+    nonfavorited_tooltip: "Click to add to the courses menu."
     wrapper: 
       close_course_menu_title: close
       reset_course_menu: Reset
@@ -4326,10 +4383,12 @@ en-AU:
         show_more: "%{count} more..."
         title: 
           ignore: "Ignore this assignment"
+          ignore_review: "Ignore this review"
       need_grading_count: 
         one: "1 needs grading"
         other: "%{count} need grading"
       no_peer_review_due_date: "due: No Due Date"
+      peer_review_due_date: "due: %{peer_review_due_at}"
       points_possible: "out of %{points_possible}"
     canvasnet_instructor: 
       avatar_url: Avatar
@@ -4347,7 +4406,6 @@ en-AU:
         confirm_delete: "Are you sure you want to delete this course? Once it is deleted, students and teachers will no longer have access to it. If you just want to remove it from the course drop-down menu, you should *conclude the course instead*."
         confirm_delete_addendum: "If you do not have permission to conclude the course, you can *change the course end date*, or ask your administrator to conclude the course."
       headings: 
-        confirm: "Confirm Action"
         confirm_conclude: "Confirm Conclude Course"
         confirm_delete: "Confirm Course Deletion"
       titles: 
@@ -4483,6 +4541,10 @@ en-AU:
     group_list: 
       headings: 
         groups: "Course Groups"
+    import_in_progress_notice: 
+      course_import_notice: 
+        status_link: "Import Status"
+        text: "One or more items are currently being imported. They will be shown in the course below once they are available."
     index: 
       headings: 
         future_enrollments: "Future Enrollments"
@@ -4551,6 +4613,7 @@ en-AU:
         name: Name
         next: Next
         section: Section
+        user_might_not_exist: "If your format is correct, contact your Canvas Admin to ensure the user has a Canvas account."
         user_role: "Role:"
         validating: Validating...
         will_not_be_added: "These users had errors and will not be added. Please ensure they are formatted correctly."
@@ -4558,6 +4621,7 @@ en-AU:
         edit_sections_desc: "Sections are an additional way to organize users. This can allow you to teach multiple classes from the same course, so that you can have the course content all in one place. Below you can move a user to a different section, or add/remove section enrollments. Users must be in at least one section at all times."
       index: 
         cannot_add_users: "New users can not be added because this course is concluded"
+        filter_field_description: "Search people. As you type in this field, the list of people will be automatically filtered to only include those whose names match your input."
         group_set: "Group Set"
         people: People
         role_to_search: "Limit search to role"
@@ -4611,6 +4675,7 @@ en-AU:
       alerts_title: Alerts
       buttons: 
         add_section: "Add Section"
+        edit_section_name: "Edit section name"
         move_course: "Move Course"
         update_course: "Update Course Details"
       course_conclude_at_warning_message: "The course is currently set to end at midnight, meaning that the previous day will be the last day this course is active."
@@ -4633,6 +4698,7 @@ en-AU:
         details: "Course Details"
         grade_publishing: "Grade Publishing"
         move_course: "Move the course to another root account"
+        navigation: "Course Navigation"
         sections: "Course Sections"
       help: 
         edit_navigation: "Drag and drop items to reorder them in the course navigation."
@@ -4658,6 +4724,7 @@ en-AU:
         allow_student_organized_groups: "Let Students organize their own Groups"
         conclude_at: Ends
         course_code: "Course Code"
+        course_format: Format
         course_lock_all_announcements: "Disable comments on announcements"
         course_name: Name
         course_section_name: "Add a New Section"
@@ -4692,7 +4759,12 @@ en-AU:
           delete_section: "Delete Section"
           edit_section: "Edit Section"
       megabytes: megabytes
-      navigation_keyboard_hint: "If using a screen reader, to change the order of the course navigation links, Turn off the virtual cursor or virtual buffer on your screen reader (press Insert-z for JAWS). Press control-home to jump to the top of the page, then press the tab key until you reach the first course navigation link. Press the up and down arrows until you hear the link you wish to move, and then press space to select it Then, press the up and down arrow keys until you locate the new position. Finally, press space again to place the link you are moving directly after the current link. When finished, reenable the virtual buffer/cursor."
+      move_module: 
+        place: Place
+      move_nav_item: 
+        after: After
+        before: Before
+        or: OR
       no_date: "No Date Set"
       no_language_preference: "Not set (user-configurable, defaults to %{language})"
       none: None
@@ -4846,8 +4918,8 @@ en-AU:
       new: New
       new_discussion_entries: "New Discussion Entries"
       new_discussions: "New Discussions"
-      num_assignments: "# Assignments"
-      num_submissions: "# Submissions"
+      number_of_assignments: "# Assignments"
+      number_of_submissions: "# Submissions"
       page_title: "Course Statistics"
       quiz: Quiz
       quiz_questions: "Quiz Questions"
@@ -4873,11 +4945,17 @@ en-AU:
       rss_feed: "%{course} Feed"
     unauthorized: 
       invalid_link: "The enrollment link you used appears to no longer be valid.  Please contact the course instructor and make sure you're still correctly enrolled."
+  create_item_base: 
+    there_was_an_error: "There was an error saving \"%{title}\", please try again."
   create_module_item: 
     assignment_name: "Assignment Name"
   create_module_item_quiz: 
+    discussion_name: "Discussion Name"
+    file_to_upload: "File to upload"
     graded_quiz: "Graded Quiz"
     graded_survey: "Graded Survey"
+    header_name: "Header Name"
+    link_title: "Link Title"
     page_name: "Page Name"
     practice_quiz: "Practice Quiz"
     quiz_name: "Quiz Name"
@@ -5010,6 +5088,7 @@ en-AU:
     show_more_link: 
       show_less: "Show Less"
       show_more: "Show More"
+  data_exports: "data exports"
   date: 
     abbr_day_names: 
       - Sun
@@ -5322,6 +5401,7 @@ en-AU:
       include_replies_in_podcast_feed: "Include Replies in podcast feed"
       only_visible_to_overrides_note: "Note: This discussion is *only* visible to the section(s) specified below:"
       options: Options
+      page_header_title: "New Discussion"
       points_possible: "Points Possible"
       post_at: "Post At"
       save: Save
@@ -5384,6 +5464,8 @@ en-AU:
         one: "1 unread reply."
         other: "%{count} unread replies."
         zero: "No unread replies."
+    notices: 
+      discussion_not_availible: "You do not have access to the requested discussion."
     page_nav: 
       Page: Page
       current_page: Current
@@ -5391,6 +5473,7 @@ en-AU:
       last_page: Last
     peer_reviews: 
       due_date: "due %{date}"
+      peer_review_alert: "You have been assigned a peer review for %{person}"
     points_possible_number: "Points possible must be a number"
     reply_count_tooltip: 
       one: "1 reply."
@@ -5434,12 +5517,12 @@ en-AU:
       speed_grader: "Speed Grader"
       topic: Topic
       topic_locked: "This topic will not be visible to users until *%{date}*"
-      topic_locked_until: "This topic is locked until %{time}"
       topic_not_visible: "This topic is not visible to users"
       topic_podcast_feed_link: "Topic Podcast Feed"
       topic_subscribe: Subscribe
       topic_subscribe_tooltip: "You are unsubscribed and will not be notified of new comments"
       topic_subscribed_tooltip: "You are subscribed and will be notified of new comments"
+      topic_time_locked: "This topic is locked until %{time}"
       topic_unsubscribe: Subscribed
       unlock_topic: "Re-Open for Comments"
       unread: Unread
@@ -5518,7 +5601,7 @@ en-AU:
       unknown_author: "Unknown Author"
       view_in_discussion: "View in discussion"
     show_all_n_replies: 
-      one: "Show all %{count} replies"
+      one: "Show one reply"
       other: "Show all %{count} replies"
     show_due_dates: "Show Due Dates"
     subscribe: "Subscribe to this topic"
@@ -5588,6 +5671,8 @@ en-AU:
     screen_reader_tip: "Screen reader users: The most accessible way to use this editor is to switch to the advanced view, and then either enter LaTeX directly, or use the toolbar to assist you in doing so. The link to switch to the advanced view can be found near the end of this dialog, directly before the edit field."
     search_flickr: "Search flickr creative commons"
     switch_editor_html: "HTML Editor"
+    switch_editor_rich_text: "Rich Content Editor"
+    switch_editor_visual: "Rich Content Editor"
     switch_to_mathjax: "Switch View to Basic"
     switch_to_mathquill: "Switch View to Advanced"
     tabs: 
@@ -5612,6 +5697,7 @@ en-AU:
       rte_help: "Rich Text Area. Press ALT F10 for toolbar. Press ALT F8 for help."
   email: 
     default_from_name: "Instructure Canvas"
+  ember_modules_description: "Modules rewritten in Ember. Uses the native drag and drop API to allow dragging from external locations."
   enrollment: 
     default_course_name: Course
     default_email: "No Email"
@@ -5845,6 +5931,7 @@ en-AU:
         eportfolio_name: "My Portfolio"
       headers: 
         add_eportfolio: "Make an ePortfolio"
+        eportfolios: ePortfolios
         my_eportfolios: "My ePortfolios"
         what: "What's an ePortfolio?"
       labels: 
@@ -5979,6 +6066,7 @@ en-AU:
         truncated: Truncated
       phrase_to_look_for: "Phrase to look for"
       posts_added: "Posts Added"
+      remove_feed: "Remove %{display_name}"
   external_tools: 
     account_navigation_configured: "Account navigation configured"
     app_full_view: 
@@ -5993,6 +6081,7 @@ en-AU:
     app_review_view: 
       posted_by_on: "Posted by *%{user.name}* on *%{created_at}*"
     app_saved_message: "%{app} saved successfully!"
+    assignment_menu_configured: "Assignment menu configured"
     buttons: 
       cancel: Cancel
       delete: Delete
@@ -6006,6 +6095,7 @@ en-AU:
     dialog_title_add_tool: "Add New App"
     dialog_title_edit_tool: "Edit External Tool"
     dialog_title_rate_tool: "How do you rate this tool?"
+    discussion_topic_menu_configured: "Discussion Topic menu configured"
     edit_view: 
       anonymous: Anonymous
       by_url: "By URL"
@@ -6056,12 +6146,14 @@ en-AU:
       load_success_message: "You are free to navigate away from this page."
       load_success_title: "Tool Use Finished"
     generic_error: "There was an error in processing your request"
+    global_navigation_configured: "Global navigation configured"
     homework_submission_configured: "Homework submission configured"
     index_view: 
       add_new_tool: "Add New App"
       all: All
       app_headder: "External Apps"
       external_tools_note: "Apps are an easy way to add new features to Canvas. They can be added to individual courses, or to all courses in an account. Once configured, you can link to them through course modules and create assignments for assessment tools."
+      external_tools_references: "*See some LTI tools* that work great with Canvas. You can also check out the **Canvas Community topics about LTI tools**"
       installed: Installed
       not_installed: "Not Installed"
       search_filter: "Filter by name"
@@ -6069,6 +6161,8 @@ en-AU:
       view_installed_tools: "View App Configurations"
     migration_selection_configured: "Migration selection configured"
     missing_stars: "You must select a star rating"
+    module_menu_configured: "Module menu configured"
+    quiz_menu_configured: "Quiz menu configured"
     rate_tool_view: 
       rate_tool: "How do you rate this tool?"
     remove_tool: "Are you sure you want to remove this tool?"
@@ -6077,16 +6171,8 @@ en-AU:
     saving: Saving...
     shared_secret: "Shared Secret"
     submit: Submit
-    tool_post_iframe: 
-      load_tool_button: "Load %{tool}"
-      load_tool_new_tab_button: "Load %{tool} in a new window"
-      new_tab: "This tool needs to be loaded in a new browser window"
-      new_tab_expired: "The session for this tool has expired. Please reload the page to access the tool again"
-      new_tab_loaded: "This tool was successfully loaded in a new browser window. Reload the page to access the tool again."
-    tool_show: 
-      tool_insecure_warning: "You are trying to launch insecure content from within a secure site (canvas). Some internet browsers may prevent this content from loading."
-      tool_load_failure: "It looks like your content might not load. You can use this button to try launching it in a new tab."
     user_navigation_configured: "User navigation configured"
+    wiki_page_menu_configured: "Wiki page menu configured"
   facebook: 
     authorization_required: "Only authorized users can access that page"
     authorization_success: "Authorization successful!  Canvas and Facebook are now friends."
@@ -6146,13 +6232,17 @@ en-AU:
       ? "on"
       : "On"
       release_notes: "release notes"
-      toggle_feature_details: "Toggle feature details"
+      toggle_feature_details_screenreader_info: "Toggle feature details for %{title}"
     feature_flag_admin_view: 
       feature_options: "Feature Options"
       no_features_available: "No features are currently available."
   features: 
+    allow_opt_out_of_inbox: "Allow users to opt out of the inbox"
     better_file_browsing: "Better File Browsing"
     differentiated_assignments: "Differentiated Assignments"
+    differentiated_assignments_account_disable_warning: |-
+        Turning this feature off will impact existing courses. For assistance in disabling this feature, please contact
+        your Canvas Success Manager.
     draft_state: "Draft State"
     draft_state_account_disable_warning: |-
         Turning this feature off will impact existing courses. For assistance in disabling this feature, please contact
@@ -6160,19 +6250,33 @@ en-AU:
     draft_state_course_disable_warning: |-
         Turning this feature off will publish ALL existing objects in the course. Please make sure all draft content
         is ready to be published and available to all users in the course before continuing.
+    ember_modules: "Ember Modules"
     google_docs_domain_restriction: "Google Docs Domain Restriction"
     high_contrast: "Use High Contrast Styles"
     html5_first_videos: "Prefer HTML5 for video playback"
     k12: "K-12 specific features"
     learning_mastery_gradebook: "Learning Mastery Gradebook"
+    lor: "LOR External Tools"
     new_quiz_moderate: "New Quiz Moderate Page"
     new_quiz_statistics: "New Quiz Statistics Page"
     new_styles: "Use New Styles"
     post_grades: "Post Grades to SIS"
     student_groups: "New Student Groups Page"
     student_outcome_gradebook: "Student Learning Mastery Gradebook"
-  file_browser_view: 
-    folder_tree_instructions: "Use the up and down arrow keys to navigate through the tree. Press right to expand folders, left to collapse, and enter to choose an image."
+  file_preview: 
+    file_preview_headerbutton_close: Close
+    file_preview_hide: Hide
+    file_preview_infotable_name: Name
+    file_preview_infotable_status: Status
+    file_preview_show: Show
+  file_rename_form: 
+    back: Back
+    change: Change
+    change_name: "Change Name"
+    name: Name
+    prompt: "Change \"%{name}\" to"
+    rename_title: Copy
+    replace: Replace
   filebrowserview: 
     course_files: "Course files"
     group_files: "Group files"
@@ -6186,12 +6290,6 @@ en-AU:
     buttons: 
       update_file: "Update File"
     cancel: Cancel
-    content_file: 
-      links: 
-        delete: "Delete this file"
-        edit: "Click to edit, drag to move to another folder"
-        preview_file: "Preview this file"
-        rename: "Rename this file"
     content_folder: 
       titles: 
         edit_and_move_instructions: "Click to edit, drag to move to another folder"
@@ -6213,6 +6311,7 @@ en-AU:
       uploading_zip: "There were errors uploading the zip file."
     fields: 
       file: File
+    files_page_title: Files
     full_index: 
       alts: 
         file_locked: locked
@@ -6358,6 +6457,7 @@ en-AU:
     default_folder_name: folder
     errors: 
       invalid_recursion: "A folder cannot be the parent of itself"
+      invalid_root_folder_name: "Root folder name cannot be changed"
     folder_created: "Folder \"%{name}\" created"
   folders: 
     event_updated: "Event was successfully updated."
@@ -6367,6 +6467,7 @@ en-AU:
     no_deleting_folders_with_content: "Can't delete a folder with content"
     no_deleting_root: "Can't delete the root folder"
     only_one_folder: "Can't set folder path and folder id"
+  for: for
   global_message_icons: 
     announcement: announcement
     calendar: calendar
@@ -6396,6 +6497,7 @@ en-AU:
       no_students_in_groups_close: "Sorry, submissions for this assignment cannot be graded in Speedgrader because there are no assigned users. Please assign users to this group set and try again. Click 'OK' to close this window."
       no_students_in_section: "Could not find any students in that section, falling back to showing all sections."
     buttons: 
+      dialog_buttons: Cancel
       saving_settings: "Saving Settings..."
       submit_comment: "Submit Comment"
       submitting: Submitting...
@@ -6415,6 +6517,7 @@ en-AU:
     graded_by_me: "%{graded_time} by me"
     graded_then_resubmitted: "graded, then resubmitted (%{when})"
     gradee_index_of_total: "%{gradee} %{x} of %{y}"
+    grading_in_progress: "Instructor is working on grades"
     group: Group
     hide_all_details_button: "Hide All Details"
     mute_assignment: "Mute Assignment"
@@ -6428,7 +6531,6 @@ en-AU:
     student: Student
     student_mute_notification: "Instructor is working on grades"
     titles: 
-      click_to_record: "Click the mic to record your comments"
       dropped_assignment_no_total: "This assignment will not be considered in the total calculation"
       hypothetical_score: "This is a What-If score"
     turnitin: 
@@ -6547,6 +6649,8 @@ en-AU:
       url: "URL Submission"
     total: Total
     total_column_header: 
+      move_to_end: "Move to end"
+      move_to_front: "Move to front"
       options: Options
       switch_to_percent: "Switch to percent"
       switch_to_points: "Switch to points"
@@ -6596,17 +6700,8 @@ en-AU:
   gradebook_uploads_form: 
     buttons: 
       upload_data: "Upload Data"
-    example_csv_file: "Example CSV file"
-    existing_assignment_example: "Existing Assignment (581)"
-    explanation_of_required_columns: "You Must have *all* of these columns, you only *need* one per row."
-    instructions: 
-      csv_download_and_upload: "If in doubt, you can always *download a CSV*, change the grades you want and re-upload the same file."
     labels: 
       upload: "Choose a CSV file to upload:"
-    leaving_id_will_match_better_can_add_new_assignment: "Leaving the ID intact (the \"(581)\" part in this case) will help match better. You can also add new assignments that will be created on the fly."
-    new_assignment_example: "A New Assignment"
-    optional_ignored: "Optional, ignored."
-    screenreader_csv_explainer: "What should be in my CSV File? The following columns should be in your upload: \"Student\", \"ID\", and \"Existing Assignment (#)\". The Student column should have the name of each student, formatted as Last Name, First Name. For example, \"Smith, John\". Existing assignment columns should say the assignment name followed by the assignment ID in parentheses. For example, \"Chapter One Worksheet (201)\". If you use SIS, include the following columns: \"SIS User ID\" and \"SIS Login ID\". If you wish to create a new assignment, include a column titled with the name of the assignment. For example, \"Derivatives Worksheet\". The following columns are optional: \"Section\", \"Current Score\", \"Final Score\"."
     titles: 
       upload_form: "Choose a CSV file to upload"
     what_should_csv_look_like: "What should the CSV file look like?"
@@ -6658,6 +6753,7 @@ en-AU:
       close_rubric: "Close Rubric"
       close_score: Close
       close_score_screenreader: "Close score details"
+      collapse: "Collapse all learning mastery outcome groups."
       collapse_title: Collapse
       comment_count: 
         one: "1 comment"
@@ -6665,9 +6761,11 @@ en-AU:
       comment_count_screenreader: "Read comments"
       comments: Comments
       disabled_for_student_view: "Test Student scores are not included in grade statistics."
+      expand: "Expand all learning mastery outcome groups."
       expand_title: Expand
       faculty_journal: "Faculty Journal for %{user}"
       for_course: "For the course,"
+      grading_in_progress: "Instructor is working on grades"
       headers: 
         details: Details
         due: Due
@@ -6676,7 +6774,6 @@ en-AU:
         out_of: "Out of"
         score: Score
       icons: 
-        rubric_results: "See rubric results"
         turnitin_results: "See Turnitin results"
       labels: 
         final_grade_hidden: "Calculation of totals has been disabled"
@@ -6713,6 +6810,7 @@ en-AU:
         view_scoring_details: "View Scoring Details"
       total: Total
     gradebook2: 
+      accessibility_warning: "Warning: The Gradebook Grid View is not accessible. Click here to use the Individual View instead."
       arrange_columns_by_due_date: "Arrange columns by due date"
       arrange_columns_by_group: "Arrange columns by assignment group"
       download_scores: "Download Scores (.csv)"
@@ -6722,6 +6820,7 @@ en-AU:
       include_ungraded: "Treat Ungraded as 0"
       individual_view: "Switch to Individual View"
       learning_mastery: "Learning Mastery"
+      page_header_title: Gradebook
       post_grades: "Post Grades"
       publish_to_sis: "Publish grades to SIS"
       set_group_weights: "Set Group Weights"
@@ -6742,6 +6841,7 @@ en-AU:
         current: Current
         student: Student
       page_title: "Gradebook History"
+      regraded: Regraded
       revert: "Revert to this grade"
       submission_count: 
         one: "1 change"
@@ -7131,6 +7231,11 @@ en-AU:
         assign_user_to_group: "Assign user to this group"
         assign_user_to_group_name: "Assign user to group %{name}"
         no_groups_created: "Groups need to be created before users can be added."
+      auto_leadership_controls: 
+        auto_first_group_leader: "Set first student to join as group leader"
+        auto_group_leader: "Automatically assign a student group leader"
+        auto_random_group_leader: "Set a random student as group leader"
+        leadership: Leadership
       edit_group_assignment: 
         all_available_groups_full: "All available groups are full."
         all_groups_full_suggestion: "Either change group limits or add more groups."
@@ -7146,6 +7251,7 @@ en-AU:
         headings: 
           account_groups: "Account-level Student Groups"
           course_groups: "Student Groups"
+          groups: Groups
         tabs: 
           everyone: Everyone
       group_category: 
@@ -7154,15 +7260,11 @@ en-AU:
         search_users: "Search users"
       group_category_create: 
         allow_self_signup: "Allow self sign-up"
-        auto_first_group_leader: "Set first student to join as group leader"
-        auto_group_leader: "Automatically assign a student group leader"
-        auto_random_group_leader: "Set a random student as group leader"
         cancel: Cancel
         create_groups: "Create %h{num_groups} groups now"
         create_groups_manually: "I'll create groups manually"
         group_set_name: "Group Set Name"
         group_structure: "Group Structure"
-        leadership: Leadership
         leave_group_limit_blank: "Leave blank for no limit"
         limit_group_size: "Limit groups to %h{group_limit} members"
         require_same_section: "Require group members to be in the same section"
@@ -7252,7 +7354,6 @@ en-AU:
     member_tooltip_show: "View group roster"
     membership_pending: 
       group_join_request: "Group Join Request"
-      group_join_request_acknowledged: "Thanks for the request, please stay tuned"
       group_join_request_info: "This group has received your request to join. You'll be notified once they accept or reject your request."
     messages: 
       creating_group: "Creating Group..."
@@ -7327,6 +7428,7 @@ en-AU:
       assignment_details: "Assignment Details"
       conversation_details: "Conversation Details"
       discussion_details: "Discussion Details"
+      peer_review_details: "Peer Review Details"
       x_more: "%{x} more..."
       x_new_in_announcements: 
         one: "*1* Announcement"
@@ -7340,6 +7442,9 @@ en-AU:
       x_new_in_discussions: 
         one: "*1* Discussion"
         other: "*%{count}* Discussions"
+      x_new_in_peer_reviews: 
+        one: "*1* Peer Review"
+        other: "*%{count}* Peer Reviews"
     local: Local
     select: 
       prompt: "Please select"
@@ -7349,7 +7454,7 @@ en-AU:
       update: "Update %{model}"
   high_contrast_description: |-
       If you would prefer a higher-contrast version of the Canvas user interface, enable this.
-      This might be useful for people with impaired vision or dificulty reading.
+      This might be useful for people with impaired vision or difficulty reading.
   html5_first_videos_description: |-
       By default, Canvas will try to use Flash first to play videos. Turn this on to try using HTML5 first,
       then fall back to Flash.
@@ -7364,6 +7469,7 @@ en-AU:
     text_entry_submission: "Text Entry Submission"
   images: 
     error_checking_color: "Error checking image colour"
+    invalid_background_color: "Background colour must be %{color}"
     invalid_dimensions: "Invalid image dimensions (got %{actual}, expected: %{expected})"
     invalid_file_size: "Image file size is too large (max %{max} bytes, got %{actual})"
     invalid_file_type: "Invalid file type %{type}. Allowed types include: %{type_list}"
@@ -7538,24 +7644,15 @@ en-AU:
   last_user_access_title: "Last User Access"
   layouts: 
     application: 
+      by_instructure: "By Instructure"
       group_switch: Switch
-      instructure_description: "Instructure, makers of the open source learning management system Canvas"
+      javascript_required: "You need to have JavaScript enabled in order to access this site."
       keyboard_navigation: 
         close: "Press comma to close this dialog"
       links: 
         close: Close
         dashboard: "My Dashboard"
         skip_to_content: "Skip To Content"
-      menu: 
-        assignments: Assignments
-        assignments_needing_grading: "To Grade"
-        assignments_needing_submitting: "To Turn In"
-        assignments_recently_graded: "Recently Graded"
-        calendar: Calendar
-        grades: Grades
-      navigation: 
-        main: "Main Navigation"
-        user_menu: "User Menu"
       open_source_learning_management_system: "Open Source LMS"
     facebook: 
       title: "Facebook Page"
@@ -7572,8 +7669,8 @@ en-AU:
       default_page_title: "Canvas LMS"
     menu: 
       view_all_accounts: "View all accounts"
-      view_all_enrollments: "View all courses"
       view_all_groups: "View all groups"
+      view_all_or_customize: "View All or Customise"
     mobile_auth: 
       log_in_to_canvas: "Log In To Canvas"
   learning_mastery_gradebook_description: |-
@@ -7748,7 +7845,6 @@ en-AU:
       media_contribution: "Media Contribution"
       play_comment: "Play Media Comment"
       record_upload_media_comment: "Record/Upload Media Comment"
-    track_uploaded_successfully: "Track uploaded successfuly, refresh to see it."
     upload: Upload
     uploading: Uploading...
   menu: 
@@ -7898,6 +7994,22 @@ en-AU:
       twitter: 
         body: "An alert has been triggered for %{student}"
         body_student: "An alert has been triggered for you"
+    announcement_created_by_you: 
+      email: 
+        html: 
+          attached_file: "Attached File"
+          download: download
+        labels: 
+          file_included: "File Included"
+      sms: 
+        details: "More info at %{url}"
+    announcement_reply: 
+      email: 
+        discussion_entry_reply_message: "Join the conversation using the link below, or comment by replying to this message."
+        html: 
+          discussion_entry_reply_message: "Join the conversation using the link below, or comment by replying to this message."
+      sms: 
+        details: "More info at %{url}"
     appointment_canceled_by_user: 
       email: 
         html: 
@@ -8505,16 +8617,43 @@ en-AU:
     content_locked_module: "This content is part of the module *%{module}* and hasn't been unlocked yet."
     content_locked_until: "This content is locked until %{date}."
     content_unpublished_module: "This content is part of an unpublished module and is not available yet."
+    conversation_created: 
+      email: 
+        attached_files: "Attached Files:"
+        audio_comment: "This message includes media comments. To listen or reply, click the link below:"
+        html: 
+          attached_files: "Attached Files:"
+          audio_comment: "This message includes media comments. To listen or reply, click the link below:"
+          download: download
+          reply_to_conversation_message: "You can reply to this message in Canvas by replying directly to this email."
+          unknown_user: "Unknown User"
+          view_message: "View this message in Conversations"
+        reply_to_conversation_message: "You can reply to this message in Canvas by replying directly to this email."
+        unknown_user: "Unknown User"
+        view_message: "View this message in Conversations"
+      facebook: 
+        link_text: "View Message"
+        unknown_user: "Unknown User"
+      sms: 
+        more_info: "More info at %{url}"
+        unknown_user: "Unknown User"
+      summary: 
+        unknown_user: "Unknown User"
+      twitter: 
+        tweet: "Canvas Alert - Message from %{user_name}."
     conversation_message: 
       email: 
         attached_files: "Attached Files:"
         audio_comment: "This message includes media comments. To listen or reply, click the link below:"
         html: 
           attached_files: "Attached Files:"
+          audio_comment: "This message includes media comments. To listen or reply, click the link below:"
           download: download
+          reply_to_conversation_message: "You can reply to this message in Canvas by replying directly to this email."
           subject: "%{user_name} just sent you a message in Canvas."
           unknown_user: "Unknown User"
           view_message: "View this message in Conversations"
+        reply_to_conversation_message: "You can reply to this message in Canvas by replying directly to this email."
         subject: "%{user_name} just sent you a message in Canvas."
         unknown_user: "Unknown User"
         view_message: "View this message in Conversations"
@@ -9141,6 +9280,7 @@ en-AU:
         discussion_entry_reply_message: "Join the conversation using the link below, or comment by replying to this message."
         html: 
           body: "%{user} posted a new comment on the thread %{discussion_topic} for %{course}:"
+          discussion_entry_reply_message: "Join the conversation using the link below, or comment by replying to this message."
           link: "Click here to join the conversation"
           subject: "New Comment for %{discussion_topic}: %{course}"
         subject: "New Comment for %{discussion_topic}: %{course}"
@@ -9272,38 +9412,6 @@ en-AU:
       twitter: 
         body_account: "Canvas Alert - New Group: %{group_name} for the account %{account}"
         body_course: "Canvas Alert - New Group: %{group_name} for the course %{course}"
-    new_teacher_registration: 
-      email: 
-        body: "%{user} just registered as a teacher at %{website}."
-        html: 
-          body: "%{user} just registered as a teacher at %{website}."
-          details: "Click here to view teacher"
-          email: Email
-          phone: Phone
-          school_name: "School Name"
-          school_position: "School Position"
-          subject: "New Teacher Registration"
-        labels: 
-          email: Email
-          phone: Phone
-          school_name: "School Name"
-          school_position: "School Position"
-        subject: "New Teacher Registration"
-      facebook: 
-        body: "%{user} just registered as a teacher at %{website}."
-        subject: "New Teacher Registration"
-      sms: 
-        body: "%{user} just registered as a teacher at %{website}."
-      summary: 
-        body: "%{user} just registered as a teacher in Canvas."
-        labels: 
-          email: Email
-          phone: Phone
-          school_name: "School Name"
-          school_position: "School Position"
-        subject: "New Teacher Registration"
-      twitter: 
-        body: "Canvas Alert - New Teacher: %{user}, %{account}"
     new_user: 
       email: 
         body: "A new user, %{user}, has just registered for the account %{account}"
@@ -9743,7 +9851,6 @@ en-AU:
         published: Published
     post_grades_dialog_title: "Post Grades to SIS"
     progression_module_collection: 
-      module_progress_for: "Module Progress for %h{student_link}"
       module_progress_for_student: "Module Progress for %{student.name}"
       no_modules_found: "No modules were found"
     progression_module_view: 
@@ -9756,6 +9863,10 @@ en-AU:
       no_students_found: "No students were found"
       student_progress: "Student Progress"
   modules_item_controller: 
+    max_score_complete: "scored no more than a *score*"
+    max_score_incomplete: "must score no more than a *score*"
+    min_score_complete: "scored at least a *score*"
+    min_score_incomplete: "must score at least a *score*"
     must_contribute_complete: "contributed to the content of the page"
     must_contribute_incomplete: "must contribute to the content of the page"
     must_submit_complete: "submitted the assignment"
@@ -9786,10 +9897,10 @@ en-AU:
   name: "Academic Benchmark Importer"
   new_facebook_message: "You have a new message from Canvas"
   new_quiz_moderate_desc: "When Draft State and Quiz Statistics is allowed/on, this enables the new quiz moderate page for an account."
-  new_quiz_statistics_desc: "When Draft State is allowed/on, this enables the new quiz statistics page for an account."
   new_styles_description: |-
       We are working on a UI facelift to Canvas. Turn this on to opt-in to seeing the
-      updated, simplified look and feel of the Canvas interface.
+      updated, simplified look and feel of the Canvas interface. This is a very "Work in progress"
+      feature and should not be turned on in production for actual users yet.
   no_migration_file: "File required for content migration."
   not_a_number: "must be a positive number"
   notification: 
@@ -9800,7 +9911,6 @@ en-AU:
         
         Assignment submission/resubmission
     all_submissions_display: "All Submissions"
-    announcement_description: "New announcement in your course"
     announcement_display: Announcement
     appointment_availability_description: |-
         *Instructor and Admin only:*
@@ -9943,7 +10053,6 @@ en-AU:
       new_file_added: "New File Added"
       new_files_added: "New Files Added"
       new_student_organized_group: "New Student Organized Group"
-      new_teacher_registration: "New Teacher Registration"
       new_user: "New User"
       pseudonym_registration: "Pseudonym Registration"
       report_generated: "Report Generated"
@@ -9960,6 +10069,15 @@ en-AU:
       updated_wiki_page: "Updated Wiki Page"
       web_conference_invitation: "Web Conference Invitation"
     no_subject: "No Subject"
+    other_description: |-
+        *Instructor and Admin only:*
+        
+        * Course enrollment
+        * Report generated
+        * Content export
+        * Migration report
+        * New account user
+        * New student group
     other_display: "Administrative Notifications"
     reminder_display: Reminder
     student_appointment_description: |-
@@ -10045,6 +10163,15 @@ en-AU:
     : "No"
     ? "yes"
     : "Yes"
+  orbis_report_header_assignment_id: "assignment id"
+  orbis_report_header_assignment_title: "assignment title"
+  orbis_report_header_canvas_course_id: "course id"
+  orbis_report_header_course_name: "course name"
+  orbis_report_header_course_sis_id: "course sis id"
+  orbis_report_header_points_possible: "points possible"
+  orbis_report_header_student_canvas_id: "canvas user id"
+  orbis_report_header_student_name: "student name"
+  orbis_report_header_submission_score: "submission score"
   outcome_groups: 
     invalid_file: "Invalid outcome group file"
   outcome_groups_api: 
@@ -10242,14 +10369,6 @@ en-AU:
   plugins: 
     academic_benchmark_importer: 
       description: "This enables importing Academic Benchmark standards into Canvas."
-    academic_benchmark_settings: 
-      api_url_description: "(e.g. %{url})"
-      common_core_guid: "(e.g. %{guid})"
-      description: "You will need access to an [Academic Benchmark](%{url}) account."
-      labels: 
-        api_key: "API Key"
-        api_url: "Api Url"
-        common_core_guid: "Common Core GUID (optional)"
     account_reports: 
       description: "Select account reports"
       name: "Account Reports"
@@ -10499,21 +10618,9 @@ en-AU:
     respondus_soap_endpoint: 
       description: "SOAP Endpoint for Respondus QTI uploads"
       name: "Respondus SOAP Endpoint"
-    respondus_soap_endpoint_settings: 
-      labels: 
-        enabled: "Enabled (must enable QTI Converter as well)"
     scribd: 
       description: "Scribd document previews"
       name: Scribd
-    scribd_settings: 
-      description: |-
-          You will need to [sign up for a Scribd API Account](%{scribd_url}).
-          Make a note of your API key and API secret.  These are available from
-          "Settings -> API" in your profile after creation.
-      labels: 
-        api_key: "API key"
-        enable_html5_viewer: "Enable HTML5 Document Viewer"
-        secret_key: "API secret"
     sessions: 
       description: "Manage session timeouts"
       name: Sessions
@@ -10596,10 +10703,6 @@ en-AU:
         poll_choice_belongs_to_poll: "That poll choice does not belong to the existing poll."
         poll_is_published: "This poll session is not open for submissions."
         user_and_poll_session_uniqueness: "can only submit one choice per poll session."
-  post_grades_description: |-
-      Post Grades allows teachers to post grades back to enabled SIS systems: Powerschool,
-      Aspire (SIS2000), JMC, and any other SIF-enabled SIS that accepts the SIF elements GradingCategory,
-       GradingAssignment, GradingAssignmentScore.
   prerequisites_lookup: 
     headers: 
       completion_prerequisites: "Completion Prerequisites"
@@ -10709,6 +10812,7 @@ en-AU:
         facebook_access: "Facebook Access"
         generate_access_token: "Generate an Access Token"
         google_docs_access: "Google Docs Access"
+        inbox_opt_out: "Conversations Inbox Opt-out"
         linkedin_access: "LinkedIn Access"
         loading_images: "Loading Images..."
         login: Login
@@ -10731,6 +10835,7 @@ en-AU:
         change_password: "Change Password"
         confirm_password: "Confirm Password"
         default_email: "Default Email"
+        disable_inbox: "Disable the Conversation's Inbox unread messages badge and send all conversation messages and notifications via email, ASAP."
         expires_at: Expires
         headers: 
           approved_integrations: "Approved Integrations"
@@ -10938,12 +11043,14 @@ en-AU:
       max_attempts: "Too many failed login attempts. Please try again later or contact your system administrator."
       no_matching_user: "Canvas doesn't have an account for user: %{user}"
       user_deleted: "That user account has been deleted.  Please contact your system administrator to have your account re-activated."
+    logout_confirm: 
+      cancel: Cancel
     mobile_login: 
       back_to_login: "Back to Login"
       buttons: 
         request_password: "Request Password"
       dont_know_password: "I don't know my password"
-      login: Login
+      log_in: "Log In"
       login_handle: "Enter your %{login_handle_name} and we'll send you a link to change your password."
       password: Password
       sending: Sending...
@@ -11402,7 +11509,7 @@ en-AU:
     answer_comments: "Answer comments"
     answer_text: "Answer text"
     assignment_points_possible: 
-      one: "%{count} pts"
+      one: "1 pt"
       other: "%{count} pts"
     assignments_label: "Assignment Quizzes toggle quiz visibility"
     buttons: 
@@ -11442,6 +11549,9 @@ en-AU:
     editor: 
       keyboard_shortcuts: 
         dialog_title: "Keyboard Shortcuts"
+        keybindings: 
+          open_dialog: "Open this help dialog"
+          open_toolbar: "Open the editor's toolbar"
     enter_answer_variable_above: "[ Enter Answer Variables Above ]"
     errors: 
       adding_questions_failed: "Adding Questions Failed, please try again"
@@ -11597,7 +11707,7 @@ en-AU:
     practices_label: "Practice Quizzes toggle quiz visibility"
     question_colon: "Question:"
     question_count: 
-      one: "%{count} Questions"
+      one: "1 Question"
       other: "%{count} Questions"
     question_limit_reached: "You have reached the maximum number of questions allowed for a quiz (%{count}/%{limit}).\\n\\nAs a workaround, consider spreading the material across multiple quizzes."
     quiz: 
@@ -11736,7 +11846,7 @@ en-AU:
         hints: 
           group_pick_count: "%{pick_count} selected so far"
         labels: 
-          add_questions_to_group: "Add questions to the quiz group"
+          add_questions_to_group: "Add questions to the question group"
           group_name: "Group Name"
           group_pick_count: Pick
           group_points: Points
@@ -11888,6 +11998,8 @@ en-AU:
         unnamed_quiz_results: "Quiz Results for %{user}"
         unnamed_survey_results: "Survey Results for %{user}"
       index: 
+        page_titles: Quizzes
+      index_legacy: 
         buttons: 
           publish_quizzes: "Publish Quizzes"
         headers: 
@@ -11931,14 +12043,11 @@ en-AU:
           save: Save
         end_quiz_reference_time_current_end: "the current end time"
         end_quiz_reference_time_now: now
-        end_quiz_when: "End the quiz %{n} minutes from %{reference_time}."
         extended_quiz_time_explanation: "You can give this student extra time on their current quiz attempt. How much time would you like to give them?"
         finished_in: "finished in %{duration}"
-        global_extra_attempts: "everyone gets %{n} already"
         headers: 
           attempt: Attempt
           attempts_left: "Attempts Left"
-          extended_quiz_time: "Extend Quiz Time"
           score: Score
           student: Student
           student_extensions: "Student Extensions"
@@ -11947,21 +12056,26 @@ en-AU:
         labels: 
           ending: Ending
           extra_attempts: "Extra Attempts"
-          extra_time_per_attempt: "Extra Time on Every Attempt"
           manually_unlock: "Manually unlock the quiz for the next attempt"
           reset_has_seen_results: "Let the student see the results one more time"
           started: Started
         minutes: minutes
         moderate_page_title: "%{title}: Moderate"
         page_title: "Moderate Quiz"
-        student_gets_extra_time: "*%{student_name}* **gets %{extra_time} extra minutes on each attempt**"
         student_n: "Student %{n}"
+        submitting: Submitting...
         titles: 
           change_user_extensions: "Change user extensions"
           manually_unlocked: "Manually Unlocked"
           minutes_to_add: "minutes to add"
           select_deselect_all: "Select/Deselect All"
           select_user: "Select %{user}"
+      move_handle: 
+        move_to: "Move To..."
+      move_question: 
+        cancel: Cancel
+        save: Save
+        saving: Saving...
       multi_answer: 
         choose_answer: Choose
       muted: 
@@ -12284,6 +12398,9 @@ en-AU:
         student_n: "Student %{student_counter}"
         survey_all_version_disclaimer: "This report is showing survey statistics based on all attempts for all users."
         survey_latest_version_disclaimer: "This report is showing survey statistics based on the latest attempt for each user."
+      statistics_cqs: 
+        page_title: "Statistics CQS"
+      statistics_cqs_crumb: "Statistics CQS"
       statistics_crumb: Statistics
       submission_version: 
         attempt_number: "Attempt %{att_no}"
@@ -12405,11 +12522,7 @@ en-AU:
         other: "%{count} Months"
       notices: 
         extra_time: "You have been given extra time on this attempt"
-        five_minutes_left: "Five Minutes Left"
         less_time: "Your time for this quiz has been reduced."
-        one_minute_left: "One Minute Left"
-        thirty_minutes_left: "Thirty Minutes Left"
-        twelve_hours_left: "Twelve Hours Left"
       question_answered: Answered
       question_unanswered: "Haven't Answered Yet"
       saved_at: "Saved at %{t}"
@@ -12463,13 +12576,44 @@ en-AU:
     upload_info: "If you made changes to the student submission files you downloaded before, just zip them back up and upload the zip with the form below. Students will see the modified files in their comments for the submission."
     upload_warning: "Make sure you don't change the names of the submission files so we can recognize them."
   react_files: 
-    aria_label: 
-      settings: Settings
+    add_folder: "Add Folder"
+    cancel: Cancel
+    count_items_selected: "%{count} items selected"
+    created_at_short: Created
+    delete: Delete
+    deleted_items_successfully: "%{count} items deleted successfully"
+    edit_name: "Edit Name"
     errors: 
       no_match: 
+        keywords: "Try different keywords."
+        spelled: "Make sure all words are spelled correctly."
         suggestions: "Suggestions:"
+        three_chars: "Enter at least 3 letters in the search box."
+        your_search: "Your search - \"%{search_term}\" - did not match any files."
+    files: Files
+    files_heading: Files
+    folder: Folder
+    labels: 
+      select: "Select This Item"
+    loading_more_results: "Loading more results..."
+    move: Move
+    move_question: 
+      one: "Where would you like to move %{item}?"
+      other: "Where would you like to move these %{count} items?"
+    move_success: 
+      one: "%{item} moved to %{destinationFolder}"
+      other: "%{count} items moved to %{destinationFolder}"
+    moving: Moving...
     name: Name
+    progress_error: "An error occured trying to prepare download, please try again."
+    progress_message: "Preparing download: %{percent}% complete"
+    restrict_access: "Restrict Access"
+    search_for_files: "Search for files"
+    select_all: "Select All"
+    settings: Settings
+    this_folder_is_empty: "This folder is empty"
     usage_details: "%{quota_used} of %{quota}"
+    view: View
   recent_student: 
     last_logged_in: "last logged in %{last_login}"
   recently_deleted_courses_title: "Recently Deleted Courses"
@@ -12523,16 +12667,29 @@ en-AU:
         name: Name
     welcome_to_canvas: "Welcome to Canvas!"
   reply_from_name: "%{name} via Canvas Notifications"
+  respondus_soap_endpoint: 
+    plugin_settings: 
+      labels: 
+        enabled: "Enabled (must enable QTI Converter as well)"
   restrict_student_access: 
     aria_label: 
-      availableFrom: "Available From"
+      availableFrom: From
       availableUntil: Until
     button_text: 
       cancel: Cancel
       update: Update
     label: 
-      availableFrom: "Available From"
-      availableUntil: Until
+      availableUntil: "Lock Until"
+    options: 
+      publish: 
+        description: Publish
+      unpublish: 
+        description: Unpublish
+    options_2: 
+      description: "Schedule student availability"
+    title: 
+      default_title: Dialog
+      limit_student_access: Permissions
   retrieve_timeout: "could not retrieve configuration, the server response timed out"
   role_override: 
     permission: 
@@ -12646,6 +12803,7 @@ en-AU:
     roles_override_index: 
       account_roles: "Account Roles"
       course_roles: "Course Roles"
+      page_header_title: "Account Permissions"
   roster: 
     delete_confirm: "Are you sure you want to remove this user?"
     error_sending_invitations: "Error sending invitation. Please try again."
@@ -12713,8 +12871,6 @@ en-AU:
         are_you_sure_delete: "Are you sure you want to delete this rubric? Any course currently associated with this rubric will still have access to it, but, no new courses will be able to use it."
         are_you_sure_remove: "Are you sure you want to remove this rubric from your list?"
       remove_rubric: "Remove this Rubric from my list"
-  scribd: 
-    upgrade_flash: "Hello, you have an old version of Adobe Flash Player. To use iPaper (and lots of other stuff on the web) you need to %{link_tag}get the latest Flash player%{end_link}."
   search: 
     course_sections: "Course Sections"
     enrollments_observers: Observers
@@ -12940,6 +13096,9 @@ en-AU:
       links: 
         add_rubric: "Add Rubric"
         assign_rubric: "Assign Rubric"
+    canvas-user-nav: 
+      navigation: 
+        user_menu: "User Menu"
     conference: 
       buttons: 
         delete: "Delete Conference"
@@ -12950,12 +13109,16 @@ en-AU:
         one: "1 participant"
         other: "%{count} participants"
     current_enrollment: 
-      course_unpublished: "This course hasn't been published yet"
       enrolled_as_designer: "Enrolled as a designer"
       enrolled_as_observer: "Enrolled as an observer"
       enrolled_as_student: "Enrolled as a student"
       enrolled_as_ta: "Enrolled as a TA"
       enrolled_as_teacher: "Enrolled as a teacher"
+      favorited_tooltip: "Click to remove from the courses menu."
+      nonfavorited_tooltip: "Click to add to the courses menu."
+      not_favoritable_tooltip: "This course cannot be add to the courses menu at this time."
+      unpublished_course: unpublished
+      unpublished_course_tooltip: "This course has not been published. Students should contact the course instructor for access."
     custom_search_results: 
       links: 
         search_for_resources: "Search for Open Resources Related to this Page"
@@ -13047,8 +13210,6 @@ en-AU:
       titles: 
         mastery_level: "percent above which to set mastery"
         select_and_add_criterion: "Select and Add Criterion"
-    flash_notice: 
-      close: Close
     flash_notices: 
       close: Close
     footer_links: 
@@ -13201,6 +13362,14 @@ en-AU:
       ta_title: "Invited as a TA, click to see the Course"
       teacher: "%{course} as a teacher."
       teacher_title: "Invited as a teacher, click to see the Course"
+    primary_header_navigation: 
+      links: 
+        inbox: Inbox
+      menu: 
+        calendar: Calendar
+        grades: Grades
+      navigation: 
+        main: "Main Navigation"
     profile: 
       add_link_field: "Add another link"
       bio: Bio
@@ -13418,11 +13587,12 @@ en-AU:
     unauthorized_feed: 
       bad_params: "The parameters for the feed you were trying to access are invalid."
       feedback: "If you're pretty sure this url was supposed to work, please tell us how you got here by clicking the link below, and we'll look into it."
-      headings: 
-        problem: "There was a problem loading your feed"
       links: 
         feedback: "Tell us what you were looking for"
       title: "Invalid Feed"
+    user_header_navigation: 
+      navigation: 
+        user_menu: "User Menu"
     user_lists: 
       copy_and_paste_notice_just_email: "Copy and paste a list of email addresses to add users."
       copy_and_paste_notice_with_login_handle: "Copy and paste a list of users. You can use their email address or %{login_handle_name}."
@@ -13894,7 +14064,6 @@ en-AU:
       prompts: 
         delete: "Are you sure you want to delete this term?"
       titles: 
-        enrollment_terms: "Enrollment Terms"
         term_details: "Term Details"
       update_term: "Update Term"
     term: 
@@ -13958,6 +14127,151 @@ en-AU:
       times: "%{start_time} to %{end_time}"
     unknown_date: "Unknown date"
     with_ago: "%{time} ago"
+  time_zones: 
+    abu_dhabi: "Abu Dhabi"
+    adelaide: Adelaide
+    alaska: Alaska
+    almaty: Almaty
+    american_samoa: "American Samoa"
+    amsterdam: Amsterdam
+    arizona: Arizona
+    astana: Astana
+    athens: Athens
+    atlantic_time_canada: "Atlantic Time (Canada)"
+    auckland: Auckland
+    azores: Azores
+    baghdad: Baghdad
+    baku: Baku
+    bangkok: Bangkok
+    beijing: Beijing
+    belgrade: Belgrade
+    berlin: Berlin
+    bern: Bern
+    bogota: Bogota
+    brasilia: Brasilia
+    bratislava: Bratislava
+    brisbane: Brisbane
+    brussels: Brussels
+    bucharest: Bucharest
+    budapest: Budapest
+    buenos_aires: "Buenos Aires"
+    cairo: Cairo
+    canberra: Canberra
+    cape_verde_is: "Cape Verde Is."
+    caracas: Caracas
+    casablanca: Casablanca
+    central_america: "Central America"
+    central_time_us_canada: "Central Time (US & Canada)"
+    chennai: Chennai
+    chihuahua: Chihuahua
+    chongqing: Chongqing
+    copenhagen: Copenhagen
+    darwin: Darwin
+    dhaka: Dhaka
+    dublin: Dublin
+    eastern_time_us_canada: "Eastern Time (US & Canada)"
+    edinburgh: Edinburgh
+    ekaterinburg: Ekaterinburg
+    fiji: Fiji
+    georgetown: Georgetown
+    greenland: Greenland
+    guadalajara: Guadalajara
+    guam: Guam
+    hanoi: Hanoi
+    harare: Harare
+    hawaii: Hawaii
+    helsinki: Helsinki
+    hobart: Hobart
+    hong_kong: "Hong Kong"
+    indiana_east: "Indiana (East)"
+    international_date_line_west: "International Date Line West"
+    irkutsk: Irkutsk
+    islamabad: Islamabad
+    istanbul: Istanbul
+    jakarta: Jakarta
+    jerusalem: Jerusalem
+    kabul: Kabul
+    kamchatka: Kamchatka
+    karachi: Karachi
+    kathmandu: Kathmandu
+    kolkata: Kolkata
+    krasnoyarsk: Krasnoyarsk
+    kuala_lumpur: "Kuala Lumpur"
+    kuwait: Kuwait
+    kyiv: Kyiv
+    la_paz: "La Paz"
+    lima: Lima
+    lisbon: Lisbon
+    ljubljana: Ljubljana
+    london: London
+    madrid: Madrid
+    magadan: Magadan
+    marshall_is: "Marshall Is."
+    mazatlan: Mazatlan
+    melbourne: Melbourne
+    mexico_city: "Mexico City"
+    mid_atlantic: Mid-Atlantic
+    midway_island: "Midway Island"
+    minsk: Minsk
+    monrovia: Monrovia
+    monterrey: Monterrey
+    moscow: Moscow
+    mountain_time_us_canada: "Mountain Time (US & Canada)"
+    mumbai: Mumbai
+    muscat: Muscat
+    nairobi: Nairobi
+    new_caledonia: "New Caledonia"
+    new_delhi: "New Delhi"
+    newfoundland: Newfoundland
+    novosibirsk: Novosibirsk
+    nukualofa: Nuku'alofa
+    osaka: Osaka
+    pacific_time_us_canada: "Pacific Time (US & Canada)"
+    paris: Paris
+    perth: Perth
+    port_moresby: "Port Moresby"
+    prague: Prague
+    pretoria: Pretoria
+    quito: Quito
+    rangoon: Rangoon
+    riga: Riga
+    riyadh: Riyadh
+    rome: Rome
+    samoa: Samoa
+    santiago: Santiago
+    sapporo: Sapporo
+    sarajevo: Sarajevo
+    saskatchewan: Saskatchewan
+    seoul: Seoul
+    singapore: Singapore
+    skopje: Skopje
+    sofia: Sofia
+    solomon_is: "Solomon Is."
+    sri_jayawardenepura: "Sri Jayawardenepura"
+    st_petersburg: "St. Petersburg"
+    stockholm: Stockholm
+    sydney: Sydney
+    taipei: Taipei
+    tallinn: Tallinn
+    tashkent: Tashkent
+    tbilisi: Tbilisi
+    tehran: Tehran
+    tijuana: Tijuana
+    tokelau_is: "Tokelau Is."
+    tokyo: Tokyo
+    ulaan_bataar: "Ulaan Bataar"
+    urumqi: Urumqi
+    utc: UTC
+    vienna: Vienna
+    vilnius: Vilnius
+    vladivostok: Vladivostok
+    volgograd: Volgograd
+    warsaw: Warsaw
+    wellington: Wellington
+    west_central_africa: "West Central Africa"
+    yakutsk: Yakutsk
+    yerevan: Yerevan
+    zagreb: Zagreb
   tinymce: 
     insert_update_image_view: 
       alt_help_text: "Describe the image to improve accessibility"
@@ -14030,7 +14344,7 @@ en-AU:
   unsupported_package: "Unsupported content package"
   unused_courses_title: "Unused Courses"
   upload_button: 
-    files: Files
+    upload: Upload
   user: 
     default_user_name: User
     errors: 
@@ -14046,6 +14360,7 @@ en-AU:
   user_date_range_search: 
     cant_be_blank: "Canvas User ID can't be blank"
     cant_come_before_from: "'To Date' can't come before 'From Date'"
+    results_found: "%{length} results found"
   user_lists: 
     add_n_users: 
       one: "OK Looks Good, Add This 1 User"
@@ -14147,6 +14462,7 @@ en-AU:
         current_courses: "Current Courses"
         last_entry: "Last Faculty Journal Entry"
         student: Student
+      journal_header: "Faculty Journal"
       page_title: "Faculty Journal"
   user_profile: 
     profile_title_too_long: "Title is too long"
@@ -14214,8 +14530,6 @@ en-AU:
         delete_user: "Delete %{user_name}"
       titles: 
         confirm_delete: "Confirm Delete User"
-        confirm_deletion_of_user: "Confirm deletion of %{user_name}"
-        delete_user: "Delete User"
         really_delete_user: "Really delete %{user_name}"
     enrollment: 
       course_not_published: "This course hasn't been published yet"

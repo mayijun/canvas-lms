@@ -24,8 +24,12 @@ pl:
   qualified_locale: pl-PL
 zh:
   locales:
-    zh: 中文
+    zh: 简体中文
   qualified_locale: zh-CN
+zh_Hant:
+  locales:
+    zh_Hant: 繁體中文
+  qualified_locale: zh-HK
 ar:
   locales:
     ar: العربية
@@ -51,11 +55,6 @@ nb:
   locales:
     nb: Norwegian (Bokmål)
   qualified_locale: nb-NO
-ko:
-  locales:
-    ko: 한국말 (crowd-sourced)
-  qualified_locale: ko-KR
-  crowdsourced: true
 en-GB:
   locales:
     en-GB: English (United Kingdom)
