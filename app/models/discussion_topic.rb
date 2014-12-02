@@ -44,6 +44,7 @@ class DiscussionTopic < ActiveRecord::Base
   attr_readonly :context_id, :context_type, :user_id
 
   has_many :discussion_entries, :order => :created_at, :dependent => :destroy
+  has_many :discussion_likes, :dependent => :destroy
   has_many :root_discussion_entries, :class_name => 'DiscussionEntry', :include => [:user], :conditions => ['discussion_entries.parent_id IS NULL AND discussion_entries.workflow_state != ?', 'deleted']
   has_one :external_feed_entry, :as => :asset
   belongs_to :external_feed
@@ -66,7 +67,7 @@ class DiscussionTopic < ActiveRecord::Base
     :editor_id, :podcast_enabled, :podcast_has_student_posts, :require_initial_post, :discussion_type, :lock_at, :pinned, :locked
   ]
 
-  EXPORTABLE_ASSOCIATIONS = [:discussion_entries, :external_feed_entry, :external_feed, :context, :assignment, :attachment, :editor, :root_topic, :child_topics, :discussion_entry_participants, :user]
+  EXPORTABLE_ASSOCIATIONS = [:discussion_entries, :external_feed_entry, :external_feed, :context, :assignment, :attachment, :editor, :root_topic, :child_topics, :discussion_entry_participants, :user, :discussion_likes]
 
   validates_presence_of :context_id, :context_type
   validates_inclusion_of :discussion_type, :in => DiscussionTypes::TYPES

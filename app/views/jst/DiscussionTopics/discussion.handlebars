@@ -63,6 +63,15 @@
 
     <div class="discussion-unread-status">
       <div class="new-and-total-badge pull-right">
+        <div class="total-items"
+                     title="{{like_count_tooltip}}"
+                     aria-hidden="true"
+                     data-tooltip>
+                  {{like_count}}
+        </div>
+        <div class="screenreader-only">
+                  {{like_count_tooltip}}
+        </div>
         <span class="new-items"
               title="{{unread_count_tooltip}}"
               aria-hidden="true"
