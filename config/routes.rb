@@ -963,6 +963,10 @@ CanvasRails::Application.routes.draw do
 
         put "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/read", action: :mark_topic_read, as: "#{context}_discussion_topic_mark_read"
         delete "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/read", action: :mark_topic_unread, as: "#{context}_discussion_topic_mark_unread"
+
+        put "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/like", action: :mark_topic_like, as: "#{context}_discussion_topic_mark_like"
+        delete "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/like", action: :mark_topic_unlike, as: "#{context}_discussion_topic_mark_unlike"
+
         put "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/read_all", action: :mark_all_read, as: "#{context}_discussion_topic_mark_all_read"
         delete "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/read_all", action: :mark_all_unread, as: "#{context}_discussion_topic_mark_all_unread"
         put "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/entries/:entry_id/read", action: :mark_entry_read, as: "#{context}_discussion_topic_discussion_entry_mark_read"

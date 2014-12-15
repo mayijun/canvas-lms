@@ -23,6 +23,7 @@ define [
       subscription_hold: null
       publishable: true
       unpublishable: true
+      liked: false
 
     dateAttributes: [
       'last_reply_at'
@@ -73,6 +74,14 @@ define [
       baseUrl = _.result this, 'url'
       @set 'subscribed', false
       $.ajaxJSON "#{baseUrl}/subscribed", 'DELETE'
+
+    markAsLike: ->
+      $.ajaxJSON ENV.DISCUSSION.MARK_LIKE_URL, 'PUT'
+      @set 'liked', true
+
+    markAsUnlike: ->
+      $.ajaxJSON ENV.DISCUSSION.MARK_UNLIKE_URL, 'DELETE'
+      @set 'liked',false
 
     toJSON: ->
       json = super

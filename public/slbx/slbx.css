@@ -168,15 +168,3 @@ body.modal #footer {
 #footer .footer-helper {
     font-size: 150%;
 }
-#section-tabs .section-tab-hidden a {
-    display:none;
-}
-#assignments_menu_item {
-    display:none;
-}
-#grades_menu_item {
-    display: none;
-}
-#calendar_menu_item {
-    display: none;
-}

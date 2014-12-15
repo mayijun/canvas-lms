@@ -30,6 +30,7 @@ define [
       'click .topic-unsubscribe-button': 'unsubscribeTopic'
       'click .mark_all_as_read': 'markAllAsRead'
       'click .mark_all_as_unread': 'markAllAsUnread'
+      'click .topic-like-button': 'markAsLike'
 
     els:
       '.add_root_reply': '$addRootReply'
@@ -39,6 +40,7 @@ define [
       '#discussion-toolbar': '$discussionToolbar'
       '.topic-subscribe-button': '$subscribeButton'
       '.topic-unsubscribe-button': '$unsubscribeButton'
+      '.topic-like-button': '$likeButton'
 
     initialize: ->
       super
@@ -53,6 +55,7 @@ define [
       @topic.url = ENV.DISCUSSION.ROOT_URL.replace /\/view/m, ''
       # set initial subscribed state
       @topic.set 'subscribed', ENV.DISCUSSION.TOPIC.IS_SUBSCRIBED
+      @topic.set 'liked', ENV.DISCUSSION.TOPIC.IS_LIKED
 
       # catch when non-root replies are added so we can twiddle the subscribed button
       EntryView.on('addReply', => @setSubscribed(true))
@@ -70,6 +73,7 @@ define [
       assignmentRubricDialog.initTriggers()
       @$el.toggleClass 'side_comment_discussion', !ENV.DISCUSSION.THREADED
       @subscriptionStatusChanged()
+      @likedStatusChanged()
       if $el = @$('#topic_publish_button')
         @topic.set(unpublishable: ENV.DISCUSSION.TOPIC.CAN_UNPUBLISH, published: ENV.DISCUSSION.TOPIC.IS_PUBLISHED)
         new PublishButtonView(model: @topic, el: $el).render()
@@ -112,6 +116,21 @@ define [
       # focus the toggled button if the toggled button was focused
       if @$unsubscribeButton.is(':focus')
         @$subscribeButton.focus()
+
+    markAsLike:(event) ->
+      event.preventDefault()
+      @topic.markAsLike()
+      @likedStatusChanged()
+
+    likedStatusChanged: =>
+      liked = @topic.get 'liked'
+      @$('.topic-like-button').hide()
+      @$('.topic-liked-button').hide()
+      if liked
+        @$('.topic-liked-button').show()
+      else
+        @$('.topic-like-button').show()
+
 
     subscriptionStatusChanged: =>
       subscribed = @topic.get 'subscribed'

@@ -513,7 +513,36 @@ class DiscussionTopicsApiController < ApplicationController
   def unsubscribe_topic
     render_state_change_result @topic.unsubscribe(@current_user)
   end
-  
+
+  def mark_topic_like
+    if !@topic.liked?(@current_user)
+    @topic.discussion_likes.create(user: @current_user)
+      respond_to do |format|
+        format.json {
+          render(:nothing => true , :status =>  :created)
+        }
+      end
+    else
+      respond_to do |format|
+        format.json {
+          render(:nothing => true , :status =>  :no_content)
+        }
+        end
+    end
+  end
+
+  def mark_topic_unlike
+    if @topic.liked?(@current_user)
+    @topic.discussion_likes.where(user_id: @current_user.id).first.destroy
+    end
+    respond_to do |format|
+      format.json {
+        render(:nothing => true , :status =>  :no_content)
+      }
+    end
+  end
+
+
   protected
   def require_topic
     @topic = @context.all_discussion_topics.active.find(params[:topic_id])

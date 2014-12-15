@@ -410,6 +410,16 @@ class DiscussionTopic < ActiveRecord::Base
     end
   end
 
+  def liked?(current_user = nil)
+    current_user ||= self.current_user
+    return false unless current_user
+    if self.discussion_likes.where(user_id: current_user.id).first
+      return true
+    else
+      return false
+    end
+  end
+
   def subscribe(current_user = nil)
     change_subscribed_state(true, current_user)
   end

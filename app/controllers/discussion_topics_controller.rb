@@ -448,6 +448,7 @@ class DiscussionTopicsController < ApplicationController
               :APP_URL => named_context_url(@context, :context_discussion_topic_url, @topic),
               :TOPIC => {
                 :ID => @topic.id,
+                :IS_LIKED => @topic.liked?(@current_user),
                 :IS_SUBSCRIBED => @topic.subscribed?(@current_user),
                 :IS_PUBLISHED => @topic.published?,
                 :CAN_UNPUBLISH => @topic.can_unpublish?,
@@ -468,6 +469,8 @@ class DiscussionTopicsController < ApplicationController
               :MARK_READ_URL => named_context_url(@context, :api_v1_context_discussion_topic_discussion_entry_mark_read_url, @topic, ':id'),
               :MARK_UNREAD_URL => named_context_url(@context, :api_v1_context_discussion_topic_discussion_entry_mark_unread_url, @topic, ':id'),
               :MARK_ALL_READ_URL => named_context_url(@context, :api_v1_context_discussion_topic_mark_all_read_url, @topic),
+              :MARK_LIKE_URL => named_context_url(@context, :api_v1_context_discussion_topic_mark_like_url, @topic),
+              :MARK_UNLIKE_URL => named_context_url(@context, :api_v1_context_discussion_topic_mark_unlike_url, @topic),
               :MARK_ALL_UNREAD_URL => named_context_url(@context, :api_v1_context_discussion_topic_mark_all_unread_url, @topic),
               :MANUAL_MARK_AS_READ => @current_user.try(:manual_mark_as_read?),
               :CAN_SUBSCRIBE => !@topic.subscription_hold(@current_user, @context_enrollment, session),
